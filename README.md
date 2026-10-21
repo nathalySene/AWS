@@ -4,13 +4,29 @@ Sistema de chamados com frontend HTML/CSS/JavaScript, API ASP.NET Core (.NET 10)
 
 ## Começar agora
 
-Na raiz do repositório preparado, execute:
+### Windows (PowerShell)
+
+Instale o SDK .NET 10, abra o Docker Desktop com o mecanismo de containers Linux em execução e, na raiz do projeto, execute:
+
+```powershell
+dotnet build backend/SuporteHub.API/SuporteHub.API.csproj
+docker compose up -d dynamodb
+dotnet run --project backend/SuporteHub.API/SuporteHub.API.csproj --launch-profile http --no-build
+```
+
+Se a compilação já terminou com sucesso, execute apenas os dois últimos comandos. Eles funcionam diretamente no PowerShell, sem Bash ou WSL. Mantenha o terminal aberto e aguarde a mensagem de que a aplicação está ouvindo na porta **5218**.
+
+Se `docker` não for encontrado ou não conseguir se conectar ao daemon, instale/abra o Docker Desktop e aguarde o mecanismo iniciar antes de repetir `docker compose up -d dynamodb`. Se o banco ainda estiver iniciando e a API encerrar, aguarde alguns segundos e repita somente o comando `dotnet run`.
+
+### Linux/macOS (Bash)
+
+Na raiz do repositório preparado e com a API compilada, execute:
 
 ```bash
 ./scripts/start.sh
 ```
 
-O comando inicia o banco persistente DynamoDB Local e a aplicação na porta **5218**, sem credenciais AWS. Abra a tela de cadastro: se o banco estiver vazio, a primeira conta será a conta de suporte. Escolha seu nome, e-mail e senha. As contas seguintes serão clientes. Saia e crie outra conta para testar o fluxo do cliente e, depois, entre com a conta de suporte para atender o chamado.
+Essas formas de inicialização usam o banco persistente DynamoDB Local e a aplicação na porta **5218**, sem credenciais AWS. Abra a tela de cadastro: se o banco estiver vazio, a primeira conta será a conta de suporte. Escolha seu nome, e-mail e senha. As contas seguintes serão clientes. Saia e crie outra conta para testar o fluxo do cliente e, depois, entre com a conta de suporte para atender o chamado.
 
 O primeiro cadastro usa uma transação para permitir apenas uma conta inicial de suporte, inclusive com cadastros simultâneos. Essa regra existe somente no modo local; na AWS, o cadastro público continua criando apenas clientes.
 
@@ -18,7 +34,7 @@ Os dados ficam em `.local/` e são preservados ao reiniciar. A opção AWS perma
 
 ## Se a página retornar 404
 
-Pare a execução anterior com `Ctrl+C` e, usando os arquivos atualizados deste projeto na raiz do repositório, execute:
+Pare a execução anterior com `Ctrl+C` e use os arquivos atualizados deste projeto. No Windows, siga os comandos PowerShell da seção **Começar agora**. No Bash, na raiz do repositório, execute:
 
 ```bash
 dotnet clean backend/SuporteHub.API/SuporteHub.API.csproj
@@ -116,7 +132,7 @@ A imagem do DynamoDB é fixada por versão e digest no `compose.yml`. O banco us
 
 O modo AWS nunca troca silenciosamente para o banco local. A tabela local é criada automaticamente; a tabela AWS precisa existir.
 
-Os perfis `http` e `https` em `Properties/launchSettings.json` apontam para o mesmo banco local. Antes de usar `dotnet run` ou iniciar pelo IDE, execute `docker compose up -d dynamodb`. O script `start.sh` inicia o banco automaticamente e aproveita o SDK preparado no ambiente. Compile novamente se alterar o backend.
+O comando PowerShell `dotnet run --project backend/SuporteHub.API/SuporteHub.API.csproj --launch-profile http --no-build` usa as configurações locais diretamente. Os perfis `http` e `https` em `Properties/launchSettings.json` apontam para o mesmo banco local. Antes de usar `dotnet run` ou iniciar pelo IDE, execute `docker compose up -d dynamodb`. O script `start.sh` inicia o banco automaticamente e aproveita o SDK preparado no ambiente. Compile novamente se alterar o backend.
 
 ## Criar um agente
 
