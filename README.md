@@ -72,6 +72,8 @@ Mantenha `wwwroot/` junto da DLL. Esse comando gera os arquivos da aplicação; 
 ## Funcionalidades
 
 - Cadastro de clientes, login com senha verificada e sessão em cookie HttpOnly.
+- Login com Google e conexão segura de uma conta existente, após configurar o cliente OAuth.
+- Recuperação de senha com link temporário de uso único e invalidação das sessões anteriores; entrega local de teste ou SMTP configurado.
 - Criação de chamados, busca, filtros, paginação e consulta de detalhes.
 - Histórico com respostas do cliente e do agente.
 - Upload e download de PNG, JPG e PDF de até 10 MB, até 20 anexos por chamado.
@@ -79,7 +81,15 @@ Mantenha `wwwroot/` junto da DLL. Esse comando gera os arquivos da aplicação; 
 - Painel com contagens reais, fila geral, fila pessoal, equipe e relatórios com filtro de período e exportação CSV.
 - Autorização na API: clientes acessam apenas seus próprios chamados; agentes têm acesso à operação de suporte. O solicitante vem da sessão, nunca de um e-mail enviado no formulário.
 
-Não há login Google nem envio de e-mails para recuperação de senha. Não existem contas ou senhas padrão. Os testes usam bancos separados e não criam contas no banco local da aplicação.
+Não existem contas ou senhas padrão. Os testes usam bancos separados e não criam contas no banco local da aplicação.
+
+## Configurar Google e recuperação de senha
+
+O passo a passo para criar o cliente OAuth no Google Cloud e configurar o envio de mensagens está em [docs/AUTH_SETUP.md](docs/AUTH_SETUP.md).
+
+No primeiro uso local, crie a conta de suporte pelo cadastro com senha. O login Google só fica disponível após informar Client ID e Client Secret por configuração local segura. Se já existe uma conta com o mesmo e-mail, entre com a senha e conecte o Google em **Minha conta**.
+
+No perfil Development sem SMTP, **Esqueci minha senha** gera uma mensagem de teste `.eml` em **`.local/mail`**; ela não chega à sua caixa de entrada. Abra a mensagem local para usar o link. Para enviar e-mail de verdade, configure um provedor SMTP com remetente autorizado e STARTTLS na porta 587. A integração não cria contas Google Cloud ou serviços de e-mail automaticamente. O guia explica os comandos PowerShell com `dotnet user-secrets` e a opção de usar Amazon SES.
 
 ## Opção: usar a tabela AWS existente
 
@@ -153,7 +163,12 @@ Para AWS, use as variáveis e a identidade da seção anterior. O comando pede e
 | GET | `/api/health` | Leitura de prontidão do banco configurado |
 | GET | `/api/auth/setup` | Informa se o modo local aguarda a primeira conta de suporte |
 | POST | `/api/auth/cadastro` | Cadastro de cliente, ou primeira conta de suporte no banco local vazio |
+| GET | `/api/auth/providers` | Disponibilidade das integrações de autenticação |
 | POST | `/api/auth/login` | Login |
+| GET | `/api/auth/google/start` | Iniciar login Google |
+| POST | `/api/auth/google/link` | Preparar conexão Google da conta autenticada |
+| POST | `/api/auth/forgot-password` | Solicitar recuperação sem revelar existência de conta |
+| POST | `/api/auth/reset-password` | Consumir link temporário e alterar senha |
 | GET | `/api/auth/me` | Conta autenticada |
 | POST | `/api/auth/logout` | Encerrar sessão |
 | GET, POST | `/api/chamados` | Listar e criar |
@@ -174,10 +189,14 @@ Com o código compilado, sem iniciar Docker nem outro serviço de banco:
 ```bash
 python3 tests/integration.py
 node tests/browser.cjs
+python3 tests/password_reset.py
+dotnet run --project tests/GoogleAuth.Tests/GoogleAuth.Tests.csproj
 ```
 
 Os testes criam arquivos SQLite temporários e contas de teste, sem usar o banco da aplicação nem a tabela AWS. O teste Python usa somente sua biblioteca padrão; o teste de navegador exige Playwright e Chromium (`CHROMIUM_BIN` permite indicar outro executável). Ambos aceitam `DOTNET_BIN` para localizar o SDK.
 
 A cobertura inclui inicialização da conta de suporte sem duplicidade, autenticação e autorização, isolamento entre clientes, respostas, arquivos, atribuição, status, IDs concorrentes e persistência após reinício. O navegador também valida busca, recuperação de erro, fila pessoal, equipe, relatórios e escape de HTML.
+
+A recuperação de senha possui oito testes de API e navegador (Python Playwright), incluindo expiração, uso único e encerramento de sessões anteriores. Os nove testes Google exercitam o middleware OAuth com um provedor simulado, incluindo state, correlação, PKCE e conexão explícita de contas; não usam credenciais nem confirmam acesso ao Google real.
 
 Os pacotes `Microsoft.Data.Sqlite` e `Microsoft.AspNetCore.OpenApi` foram atualizados para 10.0.13. A compilação validada terminou sem avisos, e a auditoria NuGet não encontrou vulnerabilidades conhecidas nas dependências consultadas. Para verificar novamente, execute `dotnet list backend/SuporteHub.API/SuporteHub.API.csproj package --vulnerable --include-transitive`.
