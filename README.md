@@ -14,15 +14,15 @@ dotnet run --project backend/SuporteHub.API/SuporteHub.API.csproj --launch-profi
 
 Esse comando restaura os pacotes necessários, compila o projeto e inicia a aplicação. Mantenha o terminal aberto e aguarde a mensagem de que a aplicação está ouvindo na porta **5218**. No navegador da mesma máquina, use `localhost` na porta `5218`.
 
-Não execute `bash scripts/start.sh` nem `docker compose` para esse modo. Se já baixou uma versão anterior que exigia Docker, obtenha os arquivos atualizados da branch `codex/suportehub-funcional` antes de executar o comando acima.
+Não execute `bash scripts/start.sh` nem `docker compose` para esse modo. Se já baixou uma versão anterior que exigia Docker, obtenha os arquivos atualizados da branch `suportehub-funcional` antes de executar o comando acima.
 
 Abra a tela de cadastro: se o banco local estiver vazio, a primeira conta será a conta de suporte. Escolha seu nome, e-mail e senha. As contas seguintes serão clientes. Saia e crie outra conta para testar o fluxo do cliente e entre novamente com a conta de suporte para atender o chamado.
 
 A criação da primeira conta usa uma transação para permitir apenas uma conta inicial de suporte, inclusive com cadastros simultâneos. Na AWS, o cadastro público continua criando apenas clientes.
 
-## Linux/macOS e ambiente Codex
+## Linux/macOS e ambiente na nuvem
 
-O mesmo comando `dotnet run` funciona na raiz do projeto. No ambiente Codex preparado, ative primeiro o SDK:
+O mesmo comando `dotnet run` funciona na raiz do projeto. No ambiente na nuvem preparado, ative primeiro o SDK:
 
 ```bash
 export DOTNET_ROOT=/workspace/.dotnet
@@ -38,7 +38,7 @@ dotnet build backend/SuporteHub.API/SuporteHub.API.csproj
 ./scripts/start.sh
 ```
 
-O script inicia a DLL compilada com SQLite e caminhos absolutos para os dados. Ele não inicia containers. Compile novamente após alterar o backend. O sandbox de comandos do ambiente Codex exige execução aprovada fora do sandbox para os mutexes usados por `dotnet restore/build`; essa limitação não se aplica ao PowerShell do seu computador.
+O script inicia a DLL compilada com SQLite e caminhos absolutos para os dados. Ele não inicia containers. Compile novamente após alterar o backend.
 
 ## Persistência e atualização de versões antigas
 
@@ -57,7 +57,7 @@ dotnet clean backend/SuporteHub.API/SuporteHub.API.csproj
 dotnet run --project backend/SuporteHub.API/SuporteHub.API.csproj --launch-profile http
 ```
 
-Abra a raiz do servidor na máquina onde o comando está em execução. Acessar essa porta no seu computador não conecta ao servidor deste ambiente remoto. A interface de configuração do Codex não fornece endereço público de preview.
+Abra a raiz do servidor na máquina onde o comando está em execução. Acessar essa porta no seu computador não conecta ao servidor deste ambiente remoto.
 
 A saída compilada deve conter `backend/SuporteHub.API/bin/Debug/net10.0/wwwroot/index.html`. A página inicial e `/api/health` devem responder 200; `/api/chamados` sem login responde 401, como esperado.
 
