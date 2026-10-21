@@ -11,3 +11,6 @@
 *.key
 appsettings.Development.json
 appsettings.Production.json
+
+# Persistent local development state; never commit database, files or cookie keys.
+**/.local/

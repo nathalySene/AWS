@@ -1,22 +1,97 @@
-var builder = WebApplication.CreateBuilder(args);
+using Amazon;
+using Amazon.DynamoDBv2;
+using Amazon.Runtime;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
+using SuporteHub.API.Models;
+using SuporteHub.API.Storage;
+using System.Threading.RateLimiting;
 
-// Serviços da aplicação
-builder.Services.AddControllers();
-
-// OpenAPI
-builder.Services.AddOpenApi();
-
-var app = builder.Build();
-
-// Configuração do ambiente de desenvolvimento
-if (app.Environment.IsDevelopment())
+// Resolve configuration and frontend from the built application, regardless of cwd.
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 {
-    app.MapOpenApi();
+    Args = args,
+    ContentRootPath = AppContext.BaseDirectory,
+    WebRootPath = "wwwroot"
+});
+builder.Services.AddControllers();
+builder.Services.AddOpenApi();
+builder.Services.AddSingleton<PasswordHasher<Conta>>();
+builder.Services.AddSingleton<IAmazonDynamoDB>(_ =>
+{
+    var endpoint = builder.Configuration["DynamoDb:ServiceUrl"];
+    var region = builder.Configuration["DynamoDb:Region"] ?? "us-east-1";
+    if (!string.IsNullOrEmpty(endpoint))
+    {
+        var uri = new Uri(endpoint);
+        if (!uri.IsLoopback || !builder.Environment.IsDevelopment())
+            throw new InvalidOperationException("ServiceUrl Ã© permitido apenas em loopback no ambiente Development. Para AWS, use Region e as credenciais padrÃ£o do SDK.");
+        return new AmazonDynamoDBClient(new BasicAWSCredentials("local", "local"), new AmazonDynamoDBConfig { ServiceURL = endpoint, AuthenticationRegion = region });
+    }
+    return new AmazonDynamoDBClient(new AmazonDynamoDBConfig { RegionEndpoint = RegionEndpoint.GetBySystemName(region) });
+});
+builder.Services.AddSingleton<DynamoStore>();
+var keyPath = builder.Configuration["Storage:KeysPath"] ?? ".local/keys";
+builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(Path.GetFullPath(keyPath))).SetApplicationName("SuporteHub");
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(o =>
+{
+    o.Cookie.Name = "SuporteHub.Session"; o.Cookie.HttpOnly = true; o.Cookie.SameSite = SameSiteMode.Strict;
+    o.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest; o.ExpireTimeSpan = TimeSpan.FromHours(8); o.SlidingExpiration = true;
+    o.Events.OnRedirectToLogin = context => { context.Response.StatusCode = 401; return Task.CompletedTask; };
+    o.Events.OnRedirectToAccessDenied = context => { context.Response.StatusCode = 403; return Task.CompletedTask; };
+});
+builder.Services.AddAuthorization();
+builder.Services.AddRateLimiter(o =>
+{
+    o.RejectionStatusCode = 429;
+    o.AddPolicy("auth", context => RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "local",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+});
+var app = builder.Build();
+var store = app.Services.GetRequiredService<DynamoStore>();
+await store.InitializeAsync();
+
+// Explicit provisioning command; normal registration can only create customers.
+if (args.Contains("--create-agent"))
+{
+    Console.Write("E-mail do agente: "); var email = (Console.ReadLine() ?? "").Trim().ToLowerInvariant();
+    Console.Write("Nome: "); var name = (Console.ReadLine() ?? "").Trim();
+    Console.Write("Senha (mÃ­nimo 10 caracteres): ");
+    var password = "";
+    if (Console.IsInputRedirected) password = Console.ReadLine() ?? "";
+    else { for (ConsoleKeyInfo key; (key = Console.ReadKey(true)).Key != ConsoleKey.Enter;) { if (key.Key == ConsoleKey.Backspace) { if (password.Length > 0) password = password[..^1]; } else if (!char.IsControl(key.KeyChar)) password += key.KeyChar; } Console.WriteLine(); }
+    if (!new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(email) || email.Length > 254 || name.Length is < 2 or > 100 || password.Length is < 10 or > 128)
+        throw new InvalidOperationException("E-mail, nome ou senha invÃ¡lidos.");
+    var account = new Conta { Email = email, Nome = name, Perfil = "agent" };
+    account.SenhaHash = app.Services.GetRequiredService<PasswordHasher<Conta>>().HashPassword(account, password);
+    await store.Put("USERS", email, account);
+    Console.WriteLine("Agente criado."); return;
 }
 
-app.UseHttpsRedirection();
-
-// Mapeia os Controllers
+app.UseExceptionHandler(handler => handler.Run(async context =>
+{
+    context.Response.StatusCode = 503;
+    await context.Response.WriteAsJsonAsync(new { mensagem = "NÃ£o foi possÃ­vel acessar o armazenamento. Tente novamente." });
+}));
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/api"))
+    {
+        context.Response.Headers.CacheControl = "no-store";
+        if (!HttpMethods.IsGet(context.Request.Method) && !HttpMethods.IsHead(context.Request.Method)
+            && context.Request.Headers["X-Requested-With"] != "SuporteHub")
+        { context.Response.StatusCode = 400; await context.Response.WriteAsJsonAsync(new { mensagem = "RequisiÃ§Ã£o invÃ¡lida." }); return; }
+    }
+    await next();
+});
+app.UseRateLimiter();
+app.UseAuthentication();
+app.UseAuthorization();
+if (app.Environment.IsDevelopment()) app.MapOpenApi();
+app.MapGet("/api/health", async () => { await store.Get<object>("META", "READINESS"); return Results.Ok(new { status = "ok", database = "DynamoDB" }); });
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.MapControllers();
-
-app.Run();
+await app.RunAsync();
