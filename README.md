@@ -1,58 +1,231 @@
-# SuporteHub 💜
+# SuporteHub | IT Service Management
 
-Sistema de chamados de suporte com área do cliente e painel do agente.
+**Sistema de gerenciamento de chamados e suporte técnico, desenvolvido com C#, ASP.NET Core e infraestrutura AWS.**
 
-## Estrutura
+O **SuporteHub** é uma solução web voltada à centralização, organização e acompanhamento de solicitações de suporte de Tecnologia da Informação. O projeto foi idealizado para facilitar a comunicação entre usuários e equipes de TI, melhorar a rastreabilidade dos atendimentos e contribuir para uma gestão de chamados mais eficiente.
 
-```
-suporte-hub/
-├── frontend/
-│   ├── index.html          # Ponto de entrada (carrega CSS e JS)
-│   ├── css/style.css       # Estilos e temas (claro/escuro)
-│   ├── js/
-│   │   ├── app.js          # Helpers, estado global, layout (shell) e rotas
-│   │   ├── auth.js         # Tela de login
-│   │   ├── chamados.js     # Novo chamado, listagem, detalhe + dados mock
-│   │   └── dashboard.js    # Painel do agente
-│   └── assets/             # Imagens, ícones, fontes locais
+O desenvolvimento combina conceitos de **IT Service Management (ITSM)**, desenvolvimento Full Stack, APIs RESTful e computação em nuvem, com foco em escalabilidade, organização e evolução contínua.
+
+## Tecnologias utilizadas
+
+### Backend
+
+- **C# / .NET 10** — Desenvolvimento da aplicação.
+- **ASP.NET Core Web API** — Construção de endpoints REST.
+- **AWS SDK for .NET** — Integração planejada com serviços AWS.
+- **JSON** — Estrutura de comunicação entre frontend e backend.
+
+### Frontend
+
+- **HTML5** — Estrutura das páginas.
+- **CSS3** — Estilização e interface.
+- **JavaScript** — Interatividade e comunicação com a API.
+
+### Cloud & DevOps
+
+- **Amazon DynamoDB** — Banco de dados NoSQL provisionado na AWS.
+- **AWS CloudFormation** — Infraestrutura como código (IaC).
+- **AWS IAM** — Gerenciamento de identidades e permissões.
+- **AWS CLI** — Administração e implantação de recursos.
+- **Git & GitHub** — Versionamento e gerenciamento do código-fonte.
+
+## Funcionalidades
+
+O SuporteHub está sendo desenvolvido de forma modular, permitindo a implementação progressiva de novas funcionalidades.
+
+**Implementadas na estrutura inicial:**
+
+- API REST para gerenciamento de chamados.
+- Criação de chamados por requisições HTTP.
+- Consulta de chamados cadastrados.
+- Consulta individual de chamados por identificador.
+- Estrutura de frontend para interação com o sistema.
+- Provisionamento de infraestrutura DynamoDB na AWS.
+
+**Em desenvolvimento ou planejadas:**
+
+- Persistência dos chamados no Amazon DynamoDB.
+- Autenticação e gerenciamento de usuários.
+- Dashboard de acompanhamento dos atendimentos.
+- Atualização de status e gerenciamento do ciclo de vida dos chamados.
+- Filtros e organização de solicitações.
+- Controle de permissões por perfil de usuário.
+- Indicadores operacionais para a equipe de TI.
+- Automação de processos de suporte.
+
+## Arquitetura do projeto
+
+O sistema adota uma arquitetura organizada em camadas, separando interface, regras de aplicação, acesso aos dados e infraestrutura.
+
+```text
+SuporteHub/
+│
 ├── backend/
-│   └── SuporteHub.API/     # API .NET (a implementar)
+│   └── SuporteHub.API/
 │       ├── Controllers/
-│       ├── Models/
 │       ├── DTOs/
+│       ├── Models/
+│       ├── Repositories/
 │       ├── Services/
-│       └── Repositories/
+│       ├── Properties/
+│       ├── infra/
+│       │   └── dynamodb.yml
+│       ├── Program.cs
+│       └── SuporteHub.API.csproj
+│
+├── frontend/
+│   ├── assets/
+│   ├── css/
+│   │   └── style.css
+│   ├── js/
+│   │   ├── app.js
+│   │   ├── auth.js
+│   │   ├── chamados.js
+│   │   └── dashboard.js
+│   └── index.html
+│
+├── .gitignore
 └── README.md
 ```
 
-## Rodando o frontend
+### Fluxo arquitetural previsto
 
-Não precisa de build. Sirva a pasta `frontend/` com qualquer servidor estático:
-
-```bash
-cd frontend
-python3 -m http.server 8080
-# abra http://localhost:8080
+```text
+Usuário
+   │
+   ▼
+Frontend Web
+HTML + CSS + JavaScript
+   │
+   ▼
+ASP.NET Core Web API
+   │
+   ├── Controllers
+   ├── Services
+   └── Repositories
+          │
+          ▼
+     AWS DynamoDB
 ```
 
-> Os scripts são carregados com `defer`, **nesta ordem**: `app.js` → `auth.js` → `chamados.js` → `dashboard.js`.
-> Eles compartilham o escopo global (sem módulos ES), então mantenha a ordem no `index.html`.
+A infraestrutura DynamoDB já foi provisionada. A integração de persistência entre a API e o banco de dados faz parte da próxima etapa de desenvolvimento.
 
-### Login de demonstração
+## API REST
 
-Qualquer e-mail e senha funcionam. E-mails que começam com `carlos`, `suporte` ou `agente` entram como **agente**; os demais entram como **cliente**.
+A estrutura inicial disponibiliza endpoints para gerenciamento de chamados.
 
-## Rotas (hash)
+| Método | Endpoint             | Descrição                       |
+| ------ | -------------------- | ------------------------------- |
+| `GET`  | `/api/chamados`      | Lista os chamados cadastrados.  |
+| `GET`  | `/api/chamados/{id}` | Consulta um chamado específico. |
+| `POST` | `/api/chamados`      | Registra um novo chamado.       |
 
-| Rota               | Perfil  | Arquivo        |
-|--------------------|---------|----------------|
-| `#/login`          | todos   | `auth.js`      |
-| `#/novo`           | cliente | `chamados.js`  |
-| `#/chamados`       | cliente | `chamados.js`  |
-| `#/chamado/:id`    | ambos   | `chamados.js`  |
-| `#/painel`         | agente  | `dashboard.js` |
+**Observação:** na implementação inicial, os chamados são mantidos em memória. A persistência no DynamoDB está em desenvolvimento.
 
-## Próximos passos
+## Infraestrutura AWS
 
-- **Backend:** criar o projeto em `backend/SuporteHub.API` (Controllers, Models, DTOs, Services, Repositories) com endpoints de autenticação, chamados e métricas.
-- **Frontend:** trocar o array mock `T` em `chamados.js` e os números fixos de `dashboard.js` por chamadas `fetch` à API; mover o controle de sessão em `auth.js` para token (JWT).
+O projeto utiliza infraestrutura como código para provisionar recursos na AWS de maneira padronizada.
+
+| Recurso                    | Configuração            |
+| -------------------------- | ----------------------- |
+| Cloud Provider             | Amazon Web Services     |
+| Região                     | `sa-east-1` — São Paulo |
+| Banco de dados             | Amazon DynamoDB         |
+| Tabela                     | `suportehub-dev`        |
+| Stack CloudFormation       | `suportehub-dev`        |
+| Infraestrutura como código | YAML / CloudFormation   |
+
+A configuração contempla uma tabela DynamoDB com chaves de partição e ordenação, índices secundários globais, criptografia e recursos de recuperação de dados.
+
+## Como executar o projeto
+
+### Pré-requisitos
+
+- .NET SDK 10
+- Visual Studio Code ou Visual Studio
+- Git
+- AWS CLI, para operações relacionadas à infraestrutura AWS
+
+### 1. Clonar o repositório
+
+```bash
+git clone https://github.com/nathalySene/AWS.git
+```
+
+### 2. Acessar a pasta da API
+
+```powershell
+cd AWS\backend\SuporteHub.API
+```
+
+### 3. Restaurar dependências
+
+```powershell
+dotnet restore
+```
+
+### 4. Compilar o projeto
+
+```powershell
+dotnet build
+```
+
+### 5. Executar a aplicação
+
+```powershell
+dotnet run
+```
+
+A API será iniciada no endereço local informado pelo terminal.
+
+### 6. Testar os endpoints
+
+Exemplo de consulta:
+
+```http
+GET http://localhost:PORTA/api/chamados
+```
+
+Substitua `PORTA` pela porta apresentada na inicialização da aplicação.
+
+**Segurança:** credenciais AWS não devem ser armazenadas no código-fonte. A integração com serviços AWS deve utilizar identidades IAM e mecanismos seguros de autenticação.
+
+## Objetivos do projeto
+
+O SuporteHub busca aplicar conhecimentos práticos de desenvolvimento de software e infraestrutura em nuvem para construir uma solução de suporte técnico que possa evoluir para um ambiente corporativo.
+
+Entre os principais objetivos estão a centralização dos atendimentos, a redução de processos manuais, a melhoria da organização operacional e a criação de uma base tecnológica para futuras automações.
+
+## Roadmap
+
+- [x] Estrutura inicial do frontend e backend.
+- [x] Implementação inicial da API REST.
+- [x] Modelagem básica dos chamados.
+- [x] Provisionamento do DynamoDB com CloudFormation.
+- [x] Configuração do repositório Git.
+- [ ] Integração da API com DynamoDB.
+- [ ] Autenticação e autorização.
+- [ ] Dashboard operacional integrado.
+- [ ] Gestão completa do ciclo de vida dos chamados.
+- [ ] Testes automatizados.
+- [ ] Implantação da aplicação em ambiente cloud.
+
+## Desenvolvedora
+
+**Nathaly Sene**
+
+Técnica em Desenvolvimento de Sistemas pela ETEC e estudante de Análise e Desenvolvimento de Sistemas na FIAP, com atuação em infraestrutura, suporte técnico e desenvolvimento web.
+
+O SuporteHub representa a aplicação prática de conhecimentos em desenvolvimento Full Stack, administração de sistemas e serviços em nuvem, reunindo diferentes áreas da Tecnologia da Informação em um único projeto.
+
+**Conecte-se comigo:**
+
+- [GitHub](https://github.com/nathalySene)
+- [LinkedIn](https://www.linkedin.com/in/nathalysene)
+- [Instagram](https://www.instagram.com/neruu0)
+
+---
+
+**SuporteHub — Tecnologia aplicada à eficiência do suporte de TI.**
+
+*Projeto em desenvolvimento contínuo.*
