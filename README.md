@@ -1,58 +1,73 @@
 # SuporteHub 💜
 
-Sistema de chamados com frontend HTML/CSS/JavaScript, API ASP.NET Core (.NET 10) e persistência no DynamoDB. O frontend e a API são servidos na mesma origem. HTML, CSS e JavaScript são incluídos na saída de compilação e publicação em `wwwroot/`; a página inicial funciona independentemente da pasta usada para iniciar a DLL.
+Sistema de chamados com frontend HTML/CSS/JavaScript, API ASP.NET Core (.NET 10) e banco SQLite local. O modo local precisa somente do SDK .NET 10: não exige Docker, WSL, virtualização, credenciais AWS ou instalação separada do SQLite. A opção de usar a tabela DynamoDB existente na AWS continua disponível.
 
-## Começar agora
+O frontend e a API são servidos na mesma origem. HTML, CSS e JavaScript são incluídos na saída de compilação e publicação em `wwwroot/`, independentemente da pasta usada para iniciar a DLL.
 
-### Windows (PowerShell)
+## Começar agora no Windows
 
-Instale o SDK .NET 10, abra o Docker Desktop com o mecanismo de containers Linux em execução e, na raiz do projeto, execute:
+Na raiz do projeto atualizado, execute diretamente no PowerShell:
 
 ```powershell
-dotnet build backend/SuporteHub.API/SuporteHub.API.csproj
-docker compose up -d dynamodb
-dotnet run --project backend/SuporteHub.API/SuporteHub.API.csproj --launch-profile http --no-build
+dotnet run --project backend/SuporteHub.API/SuporteHub.API.csproj --launch-profile http
 ```
 
-Se a compilação já terminou com sucesso, execute apenas os dois últimos comandos. Eles funcionam diretamente no PowerShell, sem Bash ou WSL. Mantenha o terminal aberto e aguarde a mensagem de que a aplicação está ouvindo na porta **5218**.
+Esse comando restaura os pacotes necessários, compila o projeto e inicia a aplicação. Mantenha o terminal aberto e aguarde a mensagem de que a aplicação está ouvindo na porta **5218**. No navegador da mesma máquina, use `localhost` na porta `5218`.
 
-Se `docker` não for encontrado ou não conseguir se conectar ao daemon, instale/abra o Docker Desktop e aguarde o mecanismo iniciar antes de repetir `docker compose up -d dynamodb`. Se o banco ainda estiver iniciando e a API encerrar, aguarde alguns segundos e repita somente o comando `dotnet run`.
+Não execute `bash scripts/start.sh` nem `docker compose` para esse modo. Se já baixou uma versão anterior que exigia Docker, obtenha os arquivos atualizados da branch `codex/suportehub-funcional` antes de executar o comando acima.
 
-### Linux/macOS (Bash)
+Abra a tela de cadastro: se o banco local estiver vazio, a primeira conta será a conta de suporte. Escolha seu nome, e-mail e senha. As contas seguintes serão clientes. Saia e crie outra conta para testar o fluxo do cliente e entre novamente com a conta de suporte para atender o chamado.
 
-Na raiz do repositório preparado e com a API compilada, execute:
+A criação da primeira conta usa uma transação para permitir apenas uma conta inicial de suporte, inclusive com cadastros simultâneos. Na AWS, o cadastro público continua criando apenas clientes.
+
+## Linux/macOS e ambiente Codex
+
+O mesmo comando `dotnet run` funciona na raiz do projeto. No ambiente Codex preparado, ative primeiro o SDK:
 
 ```bash
+export DOTNET_ROOT=/workspace/.dotnet
+export PATH="$DOTNET_ROOT:$PATH"
+export DOTNET_CLI_HOME=/workspace/.cloud-setup/dotnet-home
+export NUGET_PACKAGES=/workspace/.cloud-setup/nuget
+```
+
+Também é possível compilar e usar o script de inicialização Bash:
+
+```bash
+dotnet build backend/SuporteHub.API/SuporteHub.API.csproj
 ./scripts/start.sh
 ```
 
-Essas formas de inicialização usam o banco persistente DynamoDB Local e a aplicação na porta **5218**, sem credenciais AWS. Abra a tela de cadastro: se o banco estiver vazio, a primeira conta será a conta de suporte. Escolha seu nome, e-mail e senha. As contas seguintes serão clientes. Saia e crie outra conta para testar o fluxo do cliente e, depois, entre com a conta de suporte para atender o chamado.
+O script inicia a DLL compilada com SQLite e caminhos absolutos para os dados. Ele não inicia containers. Compile novamente após alterar o backend. O sandbox de comandos do ambiente Codex exige execução aprovada fora do sandbox para os mutexes usados por `dotnet restore/build`; essa limitação não se aplica ao PowerShell do seu computador.
 
-O primeiro cadastro usa uma transação para permitir apenas uma conta inicial de suporte, inclusive com cadastros simultâneos. Essa regra existe somente no modo local; na AWS, o cadastro público continua criando apenas clientes.
+## Persistência e atualização de versões antigas
 
-Os dados ficam em `.local/` e são preservados ao reiniciar. A opção AWS permanece disponível em `./scripts/run-aws.sh`, mas não é necessária para executar o projeto localmente.
+O modo local usa `Storage__Provider=Sqlite`. Os scripts e perfis de desenvolvimento guardam o banco no arquivo **`.local/suportehub.db`**, os anexos em `.local/uploads` e as chaves de proteção das sessões em `.local/keys`. A API cria o banco e sua estrutura automaticamente. Mantenha esses arquivos para preservar contas, chamados, histórico, anexos e sessões após reiniciar.
+
+Dados de uma versão anterior com DynamoDB Local **não são migrados automaticamente** para SQLite. A mudança não apaga nem modifica os arquivos antigos em `.local/dynamodb` ou as tabelas AWS. Quem já tem dados no banco anterior deve mantê-los e fazer uma migração separada antes de trocar seu banco de trabalho. O `compose.yml` foi preservado para compatibilidade com esse ambiente anterior, mas não participa da inicialização padrão.
+
+O arquivo SQLite, seus arquivos auxiliares e os demais dados locais são ignorados pelo Git. Faça backup de `.local/` com a aplicação parada. Em múltiplas instâncias, anexos e chaves de sessão precisam de armazenamento compartilhado; S3 para os arquivos e proteção das chaves em repouso são etapas de implantação ainda não implementadas.
 
 ## Se a página retornar 404
 
-Pare a execução anterior com `Ctrl+C` e use os arquivos atualizados deste projeto. No Windows, siga os comandos PowerShell da seção **Começar agora**. No Bash, na raiz do repositório, execute:
+Pare a execução anterior com `Ctrl+C` e use os arquivos atualizados deste projeto. Na raiz, execute:
 
-```bash
+```powershell
 dotnet clean backend/SuporteHub.API/SuporteHub.API.csproj
-dotnet build backend/SuporteHub.API/SuporteHub.API.csproj
-./scripts/start.sh
+dotnet run --project backend/SuporteHub.API/SuporteHub.API.csproj --launch-profile http
 ```
 
-O terminal deve informar que a aplicação está ouvindo na porta **5218**. Abra a raiz do servidor no navegador da **mesma máquina** onde esses comandos foram executados. Acessar essa porta no seu computador não conecta ao servidor de um ambiente remoto. Este ambiente de configuração não fornece um endereço público de preview.
+Abra a raiz do servidor na máquina onde o comando está em execução. Acessar essa porta no seu computador não conecta ao servidor deste ambiente remoto. A interface de configuração do Codex não fornece endereço público de preview.
 
-A saída compilada deve conter `backend/SuporteHub.API/bin/Debug/net10.0/wwwroot/index.html`. Os scripts de inicialização verificam esse arquivo e pedem uma nova compilação se ele estiver ausente. Para diagnosticar: a página inicial e `/api/health` devem responder 200; `/api/chamados` sem login responde 401, como esperado.
+A saída compilada deve conter `backend/SuporteHub.API/bin/Debug/net10.0/wwwroot/index.html`. A página inicial e `/api/health` devem responder 200; `/api/chamados` sem login responde 401, como esperado.
 
-Para distribuir a aplicação, publique o projeto completo e mantenha sua pasta `wwwroot/` junto da DLL:
+Para gerar uma distribuição com o frontend incluído:
 
-```bash
+```powershell
 dotnet publish backend/SuporteHub.API/SuporteHub.API.csproj -o ./artifacts/app
 ```
 
-O resultado da publicação foi validado executando a DLL a partir de uma pasta diferente do projeto. Esse comando gera arquivos; ele não hospeda nem publica o site na internet.
+Mantenha `wwwroot/` junto da DLL. Esse comando gera os arquivos da aplicação; ele não hospeda o site na internet.
 
 ## Funcionalidades
 
@@ -64,53 +79,47 @@ O resultado da publicação foi validado executando a DLL a partir de uma pasta 
 - Painel com contagens reais, fila geral, fila pessoal, equipe e relatórios com filtro de período e exportação CSV.
 - Autorização na API: clientes acessam apenas seus próprios chamados; agentes têm acesso à operação de suporte. O solicitante vem da sessão, nunca de um e-mail enviado no formulário.
 
-Não há login Google nem envio de e-mails para recuperação de senha. Os controles de demonstração foram removidos para evitar simular autenticação ou operações que não existem.
-
-## Preparar o SDK e compilar
-
-Requisitos: SDK .NET 10. Para testes locais, Docker com Compose. O frontend não requer npm nem build.
-
-No ambiente Codex preparado:
-
-```bash
-export DOTNET_ROOT=/workspace/.dotnet
-export PATH="$DOTNET_ROOT:$PATH"
-export DOTNET_CLI_HOME=/workspace/.cloud-setup/dotnet-home
-export NUGET_PACKAGES=/workspace/.cloud-setup/nuget
-```
-
-Na raiz do repositório:
-
-```bash
-dotnet restore backend/SuporteHub.API/SuporteHub.API.csproj
-dotnet build backend/SuporteHub.API/SuporteHub.API.csproj --no-restore
-```
-
-O sandbox de comandos deste ambiente exige execução aprovada fora do sandbox para os mutexes usados por `dotnet restore/build`. A execução direta da DLL funciona no sandbox.
+Não há login Google nem envio de e-mails para recuperação de senha. Não existem contas ou senhas padrão. Os testes usam bancos separados e não criam contas no banco local da aplicação.
 
 ## Opção: usar a tabela AWS existente
 
-Configuração AWS preservada:
+Configuração preservada:
 
 - Tabela: **suportehub-dev**
 - Região: **sa-east-1** (São Paulo)
 - Stack informada: **suportehub-dev**
 
-Disponibilize uma identidade AWS válida ao SDK .NET, por exemplo uma role da máquina ou um perfil AWS montado de forma segura. Nunca coloque chaves no código, no repositório ou no chat. Valores substituídos por um proxy de segredos não equivalem a credenciais brutas para assinar requisições AWS SigV4.
+Para esse modo, configure explicitamente `Storage__Provider=DynamoDb`. Disponibilize uma identidade AWS válida ao SDK .NET, por exemplo uma role da máquina ou um perfil AWS montado de forma segura. Não coloque chaves no código, no repositório ou no chat. Valores substituídos por um proxy de segredos não equivalem a credenciais brutas para assinar requisições AWS SigV4.
 
-A identidade precisa de `dynamodb:GetItem`, `dynamodb:PutItem`, `dynamodb:Query` e `dynamodb:UpdateItem` no ARN da tabela. O template existente já contempla essas ações. Libere o destino HTTPS `dynamodb.sa-east-1.amazonaws.com` na rede do ambiente. A aplicação não cria, limpa nem modifica o esquema de tabelas AWS durante a inicialização; faz uma leitura para confirmar acesso.
+A identidade precisa de `dynamodb:GetItem`, `dynamodb:PutItem`, `dynamodb:Query` e `dynamodb:UpdateItem` no ARN da tabela. Libere o destino HTTPS `dynamodb.sa-east-1.amazonaws.com` na rede. A inicialização não cria, limpa nem modifica o esquema de tabelas AWS; faz uma leitura para confirmar acesso.
+
+Com o projeto compilado, no PowerShell:
+
+```powershell
+$env:Storage__Provider = "DynamoDb"
+$env:DynamoDb__TableName = "suportehub-dev"
+$env:DynamoDb__Region = "sa-east-1"
+Remove-Item Env:DynamoDb__ServiceUrl -ErrorAction SilentlyContinue
+$env:ASPNETCORE_ENVIRONMENT = "Development"
+$env:ASPNETCORE_URLS = "http://127.0.0.1:5218"
+$env:Storage__KeysPath = Join-Path $PWD ".local/aws-keys"
+$env:Storage__UploadsPath = Join-Path $PWD ".local/aws-uploads"
+dotnet backend/SuporteHub.API/bin/Debug/net10.0/SuporteHub.API.dll
+```
+
+Em Bash:
 
 ```bash
 ./scripts/run-aws.sh
 ```
 
-A aplicação escuta por padrão na porta **5218**. Use HTTPS no acesso público, com o terminador TLS configurado para a implantação. Não sirva `frontend/` separadamente com Python: as rotas `/api` precisam estar na mesma origem.
+O script AWS usa diretórios separados para anexos e sessões e não troca silenciosamente para o banco local. Use HTTPS no acesso público, com o terminador TLS configurado para a implantação. Não sirva `frontend/` separadamente: a API precisa estar na mesma origem.
 
-**Situação neste ambiente:** a leitura AWS foi tentada, mas o SDK informou que não há perfil/identidade AWS utilizável. O acesso de rede ao endpoint também foi bloqueado; sua liberação foi salva no rascunho do ambiente. A validação com a tabela real depende de disponibilizar a identidade IAM e aplicar a configuração de rede. Os testes automatizados usam apenas DynamoDB Local.
+**Validação AWS pendente:** a tentativa anterior de leitura encontrou ausência de identidade/perfil AWS utilizável. O endpoint também foi bloqueado pela política de rede, e sua liberação foi salva no rascunho do ambiente. A conexão com a tabela real depende dessas duas configurações; nenhuma delas é necessária para o modo SQLite.
 
-### Contrato dos registros
+### Contrato dos registros DynamoDB
 
-A tabela deve ter chaves string `PK` e `SK`, como no template `infra/dynamodb.yml`. A implementação usa:
+A tabela deve ter chaves string `PK` e `SK`, como no template `infra/dynamodb.yml`:
 
 | PK | SK | Conteúdo |
 |---|---|---|
@@ -118,56 +127,30 @@ A tabela deve ter chaves string `PK` e `SK`, como no template `infra/dynamodb.ym
 | `TICKETS` | `TICKET#0000000001` | Chamado, histórico e metadados dos anexos |
 | `META` | `TICKET_COUNTER` | Contador atômico `NextId` |
 
-As entidades são armazenadas em `Data` (JSON) e `Version` (número). As atualizações usam condição de versão para evitar sobrescrever alterações concorrentes. O contador usa `UpdateItem` atômico. Nenhum dado existente é apagado ou migrado automaticamente. Registros anteriores com outro formato exigem uma migração separada; a estrutura atual da tabela real ainda não pôde ser inspecionada. Os GSIs do template ainda não são usados; esta versão consulta as partições `USERS` e `TICKETS` e filtra no servidor.
+As entidades são armazenadas em `Data` (JSON) e `Version` (número), com condição de versão nas atualizações. O contador usa `UpdateItem` atômico. A aplicação não apaga nem migra registros existentes. A estrutura atual da tabela real ainda não pôde ser inspecionada. Os GSIs do template não são usados nesta versão; a API consulta as partições `USERS` e `TICKETS` e filtra no servidor.
 
-## Execução local e inicialização pelo IDE
+## Criar outros agentes
 
-O modo local é o padrão do comando `scripts/start.sh` e dos perfis de desenvolvimento do IDE. Também pode ser iniciado diretamente:
+No SQLite vazio, o primeiro cadastro pela interface cria a conta de suporte. Para agentes adicionais ou para o primeiro agente na AWS, use o comando administrativo com as mesmas configurações de banco usadas pela API:
 
-```bash
-./scripts/run-local.sh
+```powershell
+dotnet backend/SuporteHub.API/bin/Debug/net10.0/SuporteHub.API.dll --create-agent
 ```
 
-A imagem do DynamoDB é fixada por versão e digest no `compose.yml`. O banco usa um diretório persistente em `.local/dynamodb`; a porta 8000 é publicada apenas em loopback. O script configura `DynamoDb__ServiceUrl=http://127.0.0.1:8000` e a tabela **suportehub-local**. A API só aceita endpoint alternativo em loopback e com `ASPNETCORE_ENVIRONMENT=Development`.
+Antes do comando, configure o provedor e os caminhos apropriados. Para SQLite, na raiz do repositório:
 
-O modo AWS nunca troca silenciosamente para o banco local. A tabela local é criada automaticamente; a tabela AWS precisa existir.
-
-O comando PowerShell `dotnet run --project backend/SuporteHub.API/SuporteHub.API.csproj --launch-profile http --no-build` usa as configurações locais diretamente. Os perfis `http` e `https` em `Properties/launchSettings.json` apontam para o mesmo banco local. Antes de usar `dotnet run` ou iniciar pelo IDE, execute `docker compose up -d dynamodb`. O script `start.sh` inicia o banco automaticamente e aproveita o SDK preparado no ambiente. Compile novamente se alterar o backend.
-
-## Criar um agente
-
-No banco local vazio, o primeiro cadastro pela interface cria a conta de suporte. Cadastros posteriores criam clientes. Para agentes adicionais ou para o primeiro agente na AWS, use o comando administrativo na pasta `backend/SuporteHub.API`, com as mesmas configurações de banco da API:
-
-```bash
-# Para AWS, deixe DynamoDb__ServiceUrl ausente e disponibilize a identidade IAM.
-export DynamoDb__TableName=suportehub-dev
-export DynamoDb__Region=sa-east-1
-dotnet bin/Debug/net10.0/SuporteHub.API.dll --create-agent
+```powershell
+$env:Storage__Provider = "Sqlite"
+$env:Storage__DatabasePath = Join-Path $PWD ".local/suportehub.db"
 ```
 
-O comando pede e-mail, nome e senha de 10 a 128 caracteres; a senha não é mostrada no terminal nem passada em argumentos. Ele não substitui uma conta existente.
-
-Para criar um agente **local**, configure antes:
-
-```bash
-export ASPNETCORE_ENVIRONMENT=Development
-export DynamoDb__ServiceUrl=http://127.0.0.1:8000
-export DynamoDb__TableName=suportehub-local
-```
-
-Não existem contas ou senhas padrão. A conta inicial é criada por você. Os testes usam tabelas separadas e não criam contas no banco local da aplicação.
-
-## Arquivos e sessões
-
-As contas, chamados, respostas e metadados dos arquivos ficam no DynamoDB. Os bytes dos anexos ficam no diretório definido em `Storage__UploadsPath`; as chaves de proteção dos cookies ficam em `Storage__KeysPath`. Os scripts usam diretórios distintos para AWS e local dentro de `.local/`, ignorados pelo Git.
-
-Esses diretórios precisam de armazenamento persistente e backup. Reiniciar a API preserva os dados, os anexos e as sessões quando o banco e esses diretórios são mantidos. Em múltiplas instâncias, os arquivos e as chaves precisam ser compartilhados; um bucket S3 para anexos e proteção das chaves em repouso são etapas de implantação ainda não implementadas. Não apague `.local/` para reiniciar a aplicação.
+Para AWS, use as variáveis e a identidade da seção anterior. O comando pede e-mail, nome e senha de 10 a 128 caracteres, sem mostrar a senha no terminal nem passá-la em argumentos. Ele não substitui uma conta existente.
 
 ## API
 
 | Método | Rota | Uso |
 |---|---|---|
-| GET | `/api/health` | Leitura de prontidão do DynamoDB |
+| GET | `/api/health` | Leitura de prontidão do banco configurado |
 | GET | `/api/auth/setup` | Informa se o modo local aguarda a primeira conta de suporte |
 | POST | `/api/auth/cadastro` | Cadastro de cliente, ou primeira conta de suporte no banco local vazio |
 | POST | `/api/auth/login` | Login |
@@ -182,20 +165,19 @@ Esses diretórios precisam de armazenamento persistente e backup. Reiniciar a AP
 | GET | `/api/chamados/{id}/anexos/{fileId}` | Download autorizado |
 | GET | `/api/equipe` | Agentes cadastrados (apenas agentes) |
 
-Requisições que modificam dados exigem o cabeçalho `X-Requested-With: SuporteHub`. Não há CORS para outras origens. O cookie é HttpOnly e SameSite Strict; é Secure quando a conexão usa HTTPS. O login possui limitação de tentativas. Senhas são armazenadas com o `PasswordHasher` do ASP.NET Core; senhas e tokens não ficam em web storage. O OpenAPI fica em `/openapi/v1.json` no ambiente Development.
+Requisições que modificam dados exigem `X-Requested-With: SuporteHub`. Não há CORS para outras origens. O cookie é HttpOnly e SameSite Strict; é Secure quando a conexão usa HTTPS. O login possui limitação de tentativas. Senhas são armazenadas com o `PasswordHasher` do ASP.NET Core; senhas e tokens não ficam em web storage. O OpenAPI fica em `/openapi/v1.json` no ambiente Development.
 
 ## Testes reproduzíveis
 
-Com o código compilado e DynamoDB Local iniciado:
+Com o código compilado, sem iniciar Docker nem outro serviço de banco:
 
 ```bash
-docker compose up -d dynamodb
 python3 tests/integration.py
 node tests/browser.cjs
 ```
 
-O teste de navegador exige Playwright e Chromium instalados (`/usr/bin/chromium`, configurável por `CHROMIUM_BIN`). Ambos os testes aceitam `DOTNET_BIN` para localizar o SDK. O teste Python usa apenas a biblioteca padrão. Eles criam tabelas locais descartáveis com nomes únicos e contas de teste, sem usar a tabela AWS nem credenciais de usuários. As tabelas de teste são retidas localmente para diagnóstico.
+Os testes criam arquivos SQLite temporários e contas de teste, sem usar o banco da aplicação nem a tabela AWS. O teste Python usa somente sua biblioteca padrão; o teste de navegador exige Playwright e Chromium (`CHROMIUM_BIN` permite indicar outro executável). Ambos aceitam `DOTNET_BIN` para localizar o SDK.
 
-Os sete testes de integração cobrem inicialização da conta de suporte sem duplicidade, autenticação e autorização, isolamento entre clientes, respostas, arquivos, atribuição, status, IDs concorrentes e persistência após reinício. O navegador também valida busca, recuperação de erro, fila pessoal, equipe, relatórios e escape de HTML.
+A cobertura inclui inicialização da conta de suporte sem duplicidade, autenticação e autorização, isolamento entre clientes, respostas, arquivos, atribuição, status, IDs concorrentes e persistência após reinício. O navegador também valida busca, recuperação de erro, fila pessoal, equipe, relatórios e escape de HTML.
 
-A compilação ainda emite NU1903 para `Microsoft.OpenApi` 2.0.0 ([GHSA-v5pm-xwqc-g5wc](https://github.com/advisories/GHSA-v5pm-xwqc-g5wc)); sua atualização permanece pendente.
+Os pacotes `Microsoft.Data.Sqlite` e `Microsoft.AspNetCore.OpenApi` foram atualizados para 10.0.13. A compilação validada terminou sem avisos, e a auditoria NuGet não encontrou vulnerabilidades conhecidas nas dependências consultadas. Para verificar novamente, execute `dotnet list backend/SuporteHub.API/SuporteHub.API.csproj package --vulnerable --include-transitive`.

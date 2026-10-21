@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using Amazon.DynamoDBv2.Model;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SuporteHub.API.DTOs;
@@ -9,7 +8,7 @@ using SuporteHub.API.Storage;
 namespace SuporteHub.API.Controllers;
 
 [ApiController, Authorize, Route("api/chamados")]
-public class ChamadosController(DynamoStore store, IConfiguration config) : ControllerBase
+public class ChamadosController(IAppStore store, IConfiguration config) : ControllerBase
 {
     static readonly string[] Categories = ["Acesso", "Hardware", "Rede", "Sistemas", "Equipamentos"];
     static readonly string[] Priorities = ["Baixa", "Média", "Alta", "Urgente"];
@@ -57,7 +56,7 @@ public class ChamadosController(DynamoStore store, IConfiguration config) : Cont
         catch (ArgumentException e) { return BadRequest(new { mensagem = e.Message }); }
         t.DataAtualizacao = DateTime.UtcNow;
         try { await store.Put("TICKETS", Key(id), t, entry.Value.Version); }
-        catch (ConditionalCheckFailedException) { return Conflict(new { mensagem = "O chamado mudou durante o envio. Atualize a tela e tente novamente." }); }
+        catch (StorageConflictException) { return Conflict(new { mensagem = "O chamado mudou durante o envio. Atualize a tela e tente novamente." }); }
         catch (InvalidOperationException e) { return BadRequest(new { mensagem = e.Message }); }
         return Ok(t);
     }

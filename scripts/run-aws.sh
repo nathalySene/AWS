@@ -3,6 +3,7 @@ set -euo pipefail
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 # Never silently fall back to a local database when AWS was selected.
 unset DynamoDb__ServiceUrl
+export Storage__Provider=DynamoDb
 export DynamoDb__TableName=suportehub-dev
 export DynamoDb__Region=sa-east-1
 export ASPNETCORE_ENVIRONMENT="${ASPNETCORE_ENVIRONMENT:-Development}"

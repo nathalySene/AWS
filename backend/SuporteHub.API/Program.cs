@@ -32,7 +32,13 @@ builder.Services.AddSingleton<IAmazonDynamoDB>(_ =>
     }
     return new AmazonDynamoDBClient(new AmazonDynamoDBConfig { RegionEndpoint = RegionEndpoint.GetBySystemName(region) });
 });
-builder.Services.AddSingleton<DynamoStore>();
+var provider = builder.Configuration["Storage:Provider"] ?? "Sqlite";
+if (provider.Equals("Sqlite", StringComparison.OrdinalIgnoreCase))
+    builder.Services.AddSingleton<IAppStore, SqliteStore>();
+else if (provider.Equals("DynamoDb", StringComparison.OrdinalIgnoreCase))
+    builder.Services.AddSingleton<IAppStore, DynamoStore>();
+else
+    throw new InvalidOperationException("Storage:Provider deve ser Sqlite ou DynamoDb.");
 var keyPath = builder.Configuration["Storage:KeysPath"] ?? ".local/keys";
 builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(Path.GetFullPath(keyPath))).SetApplicationName("SuporteHub");
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(o =>
@@ -50,7 +56,7 @@ builder.Services.AddRateLimiter(o =>
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 var app = builder.Build();
-var store = app.Services.GetRequiredService<DynamoStore>();
+var store = app.Services.GetRequiredService<IAppStore>();
 await store.InitializeAsync();
 
 // Explicit provisioning command; normal registration can only create customers.
@@ -90,7 +96,7 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 if (app.Environment.IsDevelopment()) app.MapOpenApi();
-app.MapGet("/api/health", async () => { await store.Get<object>("META", "READINESS"); return Results.Ok(new { status = "ok", database = "DynamoDB" }); });
+app.MapGet("/api/health", async () => { await store.Get<object>("META", "READINESS"); return Results.Ok(new { status = "ok", database = store.ProviderName }); });
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.MapControllers();

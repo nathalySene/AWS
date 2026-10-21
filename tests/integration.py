@@ -1,6 +1,6 @@
-"""Integration tests against a disposable DynamoDB Local table (never against AWS).
+"""Integration tests against disposable SQLite files (no Docker, WSL or AWS).
 Run after building: python3 tests/integration.py
-Requires DynamoDB Local on 127.0.0.1:8000 and .NET 10 on PATH (or DOTNET_BIN).
+Requires .NET 10 on PATH (or DOTNET_BIN); all database state is temporary.
 """
 import concurrent.futures
 import http.cookiejar
@@ -54,9 +54,9 @@ class PersistenceTests(unittest.TestCase):
             raise RuntimeError('Build the API and set DOTNET_BIN or activate the .NET SDK first.')
         cls.state = tempfile.TemporaryDirectory(prefix='suportehub-tests-')
         cls.log = open(Path(cls.state.name) / 'api.log', 'w+')
-        cls.env = {**os.environ, 'ASPNETCORE_ENVIRONMENT': 'Development',
-            'DynamoDb__ServiceUrl': 'http://127.0.0.1:8000',
-            'DynamoDb__TableName': 'suportehub-test-' + uuid.uuid4().hex,
+        cls.env = {**{key: value for key, value in os.environ.items() if not key.startswith('DynamoDb__')},
+            'ASPNETCORE_ENVIRONMENT': 'Development', 'Storage__Provider': 'Sqlite',
+            'Storage__DatabasePath': str(Path(cls.state.name) / 'application.sqlite3'),
             'Storage__KeysPath': cls.state.name + '/keys', 'Storage__UploadsPath': cls.state.name + '/uploads'}
         cls.password = secrets.token_urlsafe(24)
         # stdin is used so the test password never appears in process arguments or logs.
@@ -92,7 +92,7 @@ class PersistenceTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.stop(); cls.log.close(); cls.state.cleanup()
-        # Disposable test tables are retained locally for diagnosis; no AWS calls are used.
+        # Temporary databases, uploads and cookie keys are removed after the child exits.
 
     def account(self):
         client = Client(self.base)
@@ -111,6 +111,16 @@ class PersistenceTests(unittest.TestCase):
         self.assertEqual(client.request('/api/auth/login', {'email': 'agente@example.com', 'senha': self.password})[0], 200)
         return client
 
+    def test_00_local_database_uses_a_persistent_sqlite_file(self):
+        status, health = Client(self.base).request('/api/health')
+        self.assertEqual(status, 200)
+        self.assertEqual(health['status'], 'ok')
+        self.assertEqual(health['database'].lower(), 'sqlite')
+        database = Path(self.env['Storage__DatabasePath'])
+        self.assertTrue(database.is_file())
+        with database.open('rb') as stream:
+            self.assertEqual(stream.read(16), b'SQLite format 3\x00')
+
     def test_00_frontend_is_served_outside_project_directory(self):
         client = Client(self.base)
         status, html = client.request('/', raw=True)
@@ -123,7 +133,7 @@ class PersistenceTests(unittest.TestCase):
         self.assertEqual(client.request('/api/route-that-does-not-exist', raw=True)[0], 404)
 
     def test_00_only_one_initial_local_support_account(self):
-        env = {**self.env, 'DynamoDb__TableName': 'suportehub-bootstrap-' + uuid.uuid4().hex}
+        env = {**self.env, 'Storage__DatabasePath': str(Path(self.state.name) / ('bootstrap-' + uuid.uuid4().hex + '.sqlite3'))}
         with socket.socket() as sock:
             sock.bind(('127.0.0.1', 0)); port = sock.getsockname()[1]
         base = f'http://127.0.0.1:{port}'; env['ASPNETCORE_URLS'] = base

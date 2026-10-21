@@ -5,7 +5,7 @@ using SuporteHub.API.Storage;
 namespace SuporteHub.API.Controllers;
 
 [ApiController, Authorize(Roles = "agent"), Route("api/equipe")]
-public class EquipeController(DynamoStore store) : ControllerBase
+public class EquipeController(IAppStore store) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List() => Ok((await store.Query<Conta>("USERS"))

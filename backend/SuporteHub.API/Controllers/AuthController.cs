@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using Amazon.DynamoDBv2.Model;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
@@ -13,7 +12,7 @@ using SuporteHub.API.Storage;
 namespace SuporteHub.API.Controllers;
 
 [ApiController, Route("api/auth")]
-public class AuthController(DynamoStore store, PasswordHasher<Conta> hasher) : ControllerBase
+public class AuthController(IAppStore store, PasswordHasher<Conta> hasher) : ControllerBase
 {
     public static object Public(Conta c) => new { c.Email, c.Nome, c.Perfil };
     async Task SignIn(Conta c, bool remember = false)
@@ -34,8 +33,7 @@ public class AuthController(DynamoStore store, PasswordHasher<Conta> hasher) : C
         if (c.Nome.Length < 2) return BadRequest(new { mensagem = "Informe seu nome." });
         c.SenhaHash = hasher.HashPassword(c, dto.Senha);
         try { await store.Register(c); }
-        catch (ConditionalCheckFailedException) { return Conflict(new { mensagem = "Não foi possível cadastrar este e-mail. Tente entrar na sua conta." }); }
-        catch (TransactionCanceledException) { return Conflict(new { mensagem = "O cadastro inicial foi atualizado. Tente novamente para criar sua conta." }); }
+        catch (StorageConflictException) { return Conflict(new { mensagem = "Não foi possível cadastrar este e-mail. Tente entrar na sua conta." }); }
         await SignIn(c);
         return StatusCode(201, Public(c));
     }
@@ -52,7 +50,7 @@ public class AuthController(DynamoStore store, PasswordHasher<Conta> hasher) : C
         if (result == PasswordVerificationResult.SuccessRehashNeeded)
         {
             c.SenhaHash = hasher.HashPassword(c, dto.Senha);
-            try { await store.Put("USERS", c.Email, c, record.Value.Version); } catch (ConditionalCheckFailedException) { }
+            try { await store.Put("USERS", c.Email, c, record.Value.Version); } catch (StorageConflictException) { }
         }
         await SignIn(c, dto.Lembrar);
         return Ok(Public(c));

@@ -6,8 +6,9 @@ using SuporteHub.API.Models;
 
 namespace SuporteHub.API.Storage;
 
-public class DynamoStore(IAmazonDynamoDB db, IConfiguration config)
+public class DynamoStore(IAmazonDynamoDB db, IConfiguration config) : IAppStore
 {
+    public string ProviderName => "DynamoDB";
     public string Table => config["DynamoDb:TableName"] ?? throw new InvalidOperationException("Configure DynamoDb:TableName.");
     static Dictionary<string, AttributeValue> Key(string pk, string sk) => new() { ["PK"] = new(pk), ["SK"] = new(sk) };
 
@@ -31,13 +32,15 @@ public class DynamoStore(IAmazonDynamoDB db, IConfiguration config)
         var marker = Key("META", "INITIAL_AGENT");
         marker["Data"] = new("{}"); marker["Version"] = new() { N = "1" };
         // Exactly one first local registration can claim the support role.
-        await db.TransactWriteItemsAsync(new TransactWriteItemsRequest
+        try { await db.TransactWriteItemsAsync(new TransactWriteItemsRequest
         {
             TransactItems = [
                 new() { Put = new() { TableName = Table, Item = marker, ConditionExpression = "attribute_not_exists(PK)" } },
                 new() { Put = new() { TableName = Table, Item = item, ConditionExpression = "attribute_not_exists(PK)" } }
             ]
-        });
+        }); }
+        catch (TransactionCanceledException e)
+        { throw new StorageConflictException("O cadastro inicial foi atualizado. Tente novamente para criar sua conta.", e); }
     }
 
     public async Task InitializeAsync()
@@ -103,7 +106,9 @@ public class DynamoStore(IAmazonDynamoDB db, IConfiguration config)
             request.ExpressionAttributeNames = new() { ["#v"] = "Version" };
             request.ExpressionAttributeValues = new() { [":version"] = new() { N = previousVersion.Value.ToString(CultureInfo.InvariantCulture) } };
         }
-        await db.PutItemAsync(request);
+        try { await db.PutItemAsync(request); }
+        catch (ConditionalCheckFailedException e)
+        { throw new StorageConflictException("O registro já existe ou foi alterado durante a operação.", e); }
     }
 
     public async Task<int> NextId()
