@@ -88,6 +88,8 @@ A área administrativa inclui lista e filtros de chamados, abertura em nome do s
 
 ## Opção: usar a tabela AWS existente
 
+Guia para Windows com AWS CLI, IAM, teste de esquema e inicialização: **[docs/AWS.md](docs/AWS.md)**. O perfil `aws` permite iniciar sem Bash ou Docker.
+
 Configuração preservada:
 
 - Tabela: **suportehub-dev**
@@ -96,7 +98,7 @@ Configuração preservada:
 
 Para esse modo, configure explicitamente `Storage__Provider=DynamoDb`. Disponibilize uma identidade AWS válida ao SDK .NET, por exemplo uma role da máquina ou um perfil AWS montado de forma segura. Não coloque chaves no código, no repositório ou no chat. Valores substituídos por um proxy de segredos não equivalem a credenciais brutas para assinar requisições AWS SigV4.
 
-A identidade precisa de `dynamodb:GetItem`, `dynamodb:PutItem`, `dynamodb:Query` e `dynamodb:UpdateItem` no ARN da tabela. Libere o destino HTTPS `dynamodb.sa-east-1.amazonaws.com` na rede. A inicialização não cria, limpa nem modifica o esquema de tabelas AWS; faz uma leitura para confirmar acesso.
+O script PowerShell exige também `dynamodb:DescribeTable` para conferir o esquema. A identidade da API precisa de `dynamodb:GetItem`, `dynamodb:PutItem`, `dynamodb:Query` e `dynamodb:UpdateItem` no ARN da tabela. Libere o destino HTTPS `dynamodb.sa-east-1.amazonaws.com` na rede. A inicialização não cria, limpa nem modifica o esquema de tabelas AWS; faz uma leitura para confirmar acesso.
 
 Com o projeto compilado, no PowerShell:
 

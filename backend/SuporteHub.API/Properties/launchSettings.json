@@ -26,6 +26,21 @@
         "Storage__Provider": "Sqlite",
         "Storage__DatabasePath": "../../.local/suportehub.db"
       }
+    },
+    "aws": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:5218",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "Storage__Provider": "DynamoDb",
+        "DynamoDb__TableName": "suportehub-dev",
+        "DynamoDb__Region": "sa-east-1",
+        "DynamoDb__ServiceUrl": "",
+        "Storage__KeysPath": "../../.local/aws-keys",
+        "Storage__UploadsPath": "../../.local/aws-uploads"
+      }
     }
   }
 }
