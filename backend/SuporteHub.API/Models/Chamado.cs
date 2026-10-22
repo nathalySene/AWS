@@ -14,11 +14,15 @@ public class Chamado
     public string? NomeResponsavel { get; set; }
     public DateTime DataCriacao { get; set; } = DateTime.UtcNow;
     public DateTime DataAtualizacao { get; set; } = DateTime.UtcNow;
+    public DateTime? DataResolucao { get; set; }
+    public string? ResolvidoPor { get; set; }
+    public string? NomeResolvidoPor { get; set; }
+    public List<Historico> NotasInternas { get; set; } = [];
     public List<Historico> Historico { get; set; } = [];
     public List<Anexo> Anexos { get; set; } = [];
 }
 
-public record Historico(string Autor, string Texto, string Tipo, DateTime Data);
+public record Historico(string Autor, string Texto, string Tipo, DateTime Data, string? AutorEmail = null, string? PerfilAutor = null);
 public record Anexo(string Id, string Nome, string ContentType, long Tamanho, string Autor, DateTime Data);
 public class Conta
 {

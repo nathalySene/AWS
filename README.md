@@ -77,9 +77,14 @@ Mantenha `wwwroot/` junto da DLL. Esse comando gera os arquivos da aplicação; 
 - Upload e download de PNG, JPG e PDF de até 10 MB, até 20 anexos por chamado.
 - Atribuição e transferência para agentes, atualização de status e reabertura pelo agente.
 - Painel com contagens reais, fila geral, fila pessoal, equipe e relatórios com filtro de período e exportação CSV.
+- Área de administrador com gerenciamento conjunto, notas privadas, atendidos e relatórios para impressão em PDF.
 - Autorização na API: clientes acessam apenas seus próprios chamados; agentes têm acesso à operação de suporte. O solicitante vem da sessão, nunca de um e-mail enviado no formulário.
 
 Não há login Google nem envio de e-mails para recuperação de senha. Não existem contas ou senhas padrão. Os testes usam bancos separados e não criam contas no banco local da aplicação.
+
+## Administração
+
+A área administrativa inclui lista e filtros de chamados, abertura em nome do solicitante, notas internas, gerenciamento de prioridade/responsável/status, atendidos, equipe e relatórios CSV/PDF. Não inclui avaliação. Para ativar o perfil de uma conta existente e conhecer os critérios dos relatórios, siga [docs/ADMIN.md](docs/ADMIN.md).
 
 ## Opção: usar a tabela AWS existente
 
@@ -157,6 +162,12 @@ Para AWS, use as variáveis e a identidade da seção anterior. O comando pede e
 | GET | `/api/auth/me` | Conta autenticada |
 | POST | `/api/auth/logout` | Encerrar sessão |
 | GET, POST | `/api/chamados` | Listar e criar |
+| GET | `/api/admin/usuarios` | Solicitantes cadastrados (administrador) |
+| GET | `/api/admin/solicitantes/{email}` | Dados e contagens do solicitante (administrador) |
+| POST | `/api/admin/chamados` | Abrir em nome de um solicitante (administrador) |
+| POST | `/api/admin/equipe` | Cadastrar agente (administrador) |
+| PATCH | `/api/chamados/{id}/gerenciar` | Salvar responsável, prioridade e status juntos (administrador) |
+| POST | `/api/chamados/{id}/notas` | Adicionar nota interna (administrador) |
 | GET | `/api/chamados/{id}` | Detalhes autorizados |
 | POST | `/api/chamados/{id}/respostas` | Adicionar resposta |
 | PATCH | `/api/chamados/{id}/status` | Alterar status; cliente pode resolver seu chamado |
@@ -174,6 +185,7 @@ Com o código compilado, sem iniciar Docker nem outro serviço de banco:
 ```bash
 python3 tests/integration.py
 node tests/browser.cjs
+python3 tests/admin.py
 ```
 
 Os testes criam arquivos SQLite temporários e contas de teste, sem usar o banco da aplicação nem a tabela AWS. O teste Python usa somente sua biblioteca padrão; o teste de navegador exige Playwright e Chromium (`CHROMIUM_BIN` permite indicar outro executável). Ambos aceitam `DOTNET_BIN` para localizar o SDK.

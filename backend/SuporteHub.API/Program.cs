@@ -59,10 +59,23 @@ var app = builder.Build();
 var store = app.Services.GetRequiredService<IAppStore>();
 await store.InitializeAsync();
 
-// Explicit provisioning command; normal registration can only create customers.
-if (args.Contains("--create-agent"))
+// Administrative provisioning is available only to an operator with server access.
+if (args.Contains("--promote-admin"))
 {
-    Console.Write("E-mail do agente: "); var email = (Console.ReadLine() ?? "").Trim().ToLowerInvariant();
+    Console.Write("E-mail da conta existente: ");
+    var email = (Console.ReadLine() ?? "").Trim().ToLowerInvariant();
+    var entry = await store.Get<Conta>("USERS", email)
+        ?? throw new InvalidOperationException("Conta não encontrada. Cadastre-a primeiro.");
+    var account = entry.Value; account.Perfil = "admin";
+    await store.Put("USERS", email, account, entry.Version);
+    Console.WriteLine("Administrador configurado. Entre novamente para atualizar a sessão.");
+    return;
+}
+
+// Explicit provisioning command; normal registration can only create customers.
+if (args.Contains("--create-agent") || args.Contains("--create-admin"))
+{
+    Console.Write("E-mail da nova conta: "); var email = (Console.ReadLine() ?? "").Trim().ToLowerInvariant();
     Console.Write("Nome: "); var name = (Console.ReadLine() ?? "").Trim();
     Console.Write("Senha (mínimo 10 caracteres): ");
     var password = "";
@@ -70,10 +83,10 @@ if (args.Contains("--create-agent"))
     else { for (ConsoleKeyInfo key; (key = Console.ReadKey(true)).Key != ConsoleKey.Enter;) { if (key.Key == ConsoleKey.Backspace) { if (password.Length > 0) password = password[..^1]; } else if (!char.IsControl(key.KeyChar)) password += key.KeyChar; } Console.WriteLine(); }
     if (!new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(email) || email.Length > 254 || name.Length is < 2 or > 100 || password.Length is < 10 or > 128)
         throw new InvalidOperationException("E-mail, nome ou senha inválidos.");
-    var account = new Conta { Email = email, Nome = name, Perfil = "agent" };
+    var account = new Conta { Email = email, Nome = name, Perfil = args.Contains("--create-admin") ? "admin" : "agent" };
     account.SenhaHash = app.Services.GetRequiredService<PasswordHasher<Conta>>().HashPassword(account, password);
     await store.Put("USERS", email, account);
-    Console.WriteLine("Agente criado."); return;
+    Console.WriteLine(args.Contains("--create-admin") ? "Administrador criado." : "Agente criado."); return;
 }
 
 app.UseExceptionHandler(handler => handler.Run(async context =>

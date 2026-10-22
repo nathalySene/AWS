@@ -9,7 +9,8 @@ const priorityColors={Baixa:'#8e7ba3','Média':'#d97706',Alta:'#dc2626',Urgente:
 const pill=s=>{const c=colors[s]||['#ede9fe','#6d28d9'];return `<span class="pill" style="background:${c[0]};color:${c[1]}">${esc(s)}</span>`};
 const date=s=>s?new Date(s).toLocaleString('pt-BR'):'—';
 let user=null,tickets=[],agents=[],routeVersion=0;
-const isAgent=()=>user?.perfil==='agent';
+const isAdmin=()=>user?.perfil==='admin';
+const isAgent=()=>['agent','admin'].includes(user?.perfil);
 const render=html=>{$('#app').innerHTML=html};
 const toast=message=>{const e=$('#toast');e.textContent=message;e.classList.add('on');clearTimeout(toast.timer);toast.timer=setTimeout(()=>e.classList.remove('on'),4000)};
 async function api(path,options={}){
@@ -22,9 +23,9 @@ async function api(path,options={}){
  return data;
 }
 function shell(active,content){
- const links=isAgent()?[['painel','🌈','Painel'],['fila','🎀','Fila de chamados'],['meus','💌','Meus atendimentos'],['equipe','👯','Equipe'],['relatorios','📊','Relatórios']]:[['novo','✨','Novo chamado'],['chamados','📬','Meus chamados']];
+ const links=isAdmin()?[['painel','🌈','Painel'],['admin-chamados','🎫','Chamados'],['atendidos','✅','Atendidos'],['admin-relatorios','📊','Relatórios'],['equipe','👯','Equipe']]:isAgent()?[['painel','🌈','Painel'],['fila','🎀','Fila de chamados'],['meus','💌','Meus atendimentos'],['equipe','👯','Equipe'],['relatorios','📊','Relatórios']]:[['novo','✨','Novo chamado'],['chamados','📬','Meus chamados']];
  const initials=user.nome.split(/\s+/).slice(0,2).map(s=>s[0]).join('').toUpperCase();
- return `<div class="bub b1"></div><div class="bub b2"></div><div class="shell"><aside><div class="logo"><div class="ico">♥</div>SuporteHub</div><nav>${links.map(([path,icon,label])=>`<a href="#/${path}" class="${path===active?'on':''}">${icon} ${label}</a>`).join('')}</nav><button class="user" id="out" title="Sair"><span class="av">${esc(initials)}</span><span><b>${esc(user.nome)}</b><small>${isAgent()?'Agente de suporte':'Cliente'} · Sair</small></span></button></aside><main>${content}</main></div>`;
+ return `<div class="bub b1"></div><div class="bub b2"></div><div class="shell"><aside><div class="logo"><div class="ico">♥</div>SuporteHub</div>${isAdmin()?'<span class="admin-badge">👑 Área do administrador</span>':''}<nav>${links.map(([path,icon,label])=>`<a href="#/${path}" class="${path===active?'on':''}">${icon} ${label}</a>`).join('')}</nav><button class="user" id="out" title="Sair"><span class="av">${esc(initials)}</span><span><b>${esc(user.nome)}</b><small>${isAdmin()?'Administrador':isAgent()?'Agente de suporte':'Cliente'} · Sair</small></span></button></aside><main>${content}</main></div>`;
 }
 function page(active,content){render(shell(active,content));$('#out').onclick=async()=>{try{await api('/auth/logout',{method:'POST'});user=null;tickets=[];agents=[];location.hash='#/login'}catch(e){toast(e.message)}}}
 async function submit(form,task){
@@ -39,17 +40,21 @@ async function route(){
  if(!user){if(view==='cadastro')vRegister();else if(view!=='login'&&view!==''){location.hash='#/login'}else vLogin();return}
  if(['login','cadastro',''].includes(view)){location.hash=isAgent()?'#/painel':'#/novo';return}
  if(!isAgent()&&['painel','fila','meus','equipe','relatorios'].includes(view)){location.hash='#/chamados';return}
+ if(['admin-chamados','atendidos','admin-relatorios','admin-novo'].includes(view)&&!isAdmin()){location.hash=isAgent()?'#/painel':'#/chamados';return}
  if(view==='novo'){vNovo();return}
  page(view,'<p role="status">Carregando…</p>');
  try{
   if(view==='chamado'){
    const [ticket,team]=await Promise.all([api('/chamados/'+encodeURIComponent(id)),isAgent()?api('/equipe'):Promise.resolve([])]);
-   if(version!==routeVersion)return;agents=team;vTicket(ticket);
+   if(version!==routeVersion)return;agents=team;if(isAdmin())await vAdminTicket(ticket,version);else vTicket(ticket);
   }else{
    const [items,team]=await Promise.all([api('/chamados'),isAgent()?api('/equipe'):Promise.resolve([])]);
    if(version!==routeVersion)return;tickets=items;agents=team;
-   if(['chamados','fila','meus'].includes(view))vList(view);
-   else if(view==='equipe')vTeam();else if(view==='relatorios')vReports();else if(isAgent())vPanel();else vList('chamados');
+   if(view==='admin-novo')await vAdminNew(version);
+   else if(view==='admin-chamados'||view==='atendidos')vAdminList(view);
+   else if(view==='admin-relatorios')vAdminReports();
+   else if(['chamados','fila','meus'].includes(view))vList(view);
+   else if(view==='equipe'){if(isAdmin())vAdminTeam();else vTeam();}else if(view==='relatorios')vReports();else if(isAgent())vPanel();else vList('chamados');
   }
  }catch(e){
   if(version!==routeVersion)return;

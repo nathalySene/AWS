@@ -14,3 +14,10 @@ public record LoginDto([Required, EmailAddress] string Email, [Required, StringL
 public record RespostaDto([Required, StringLength(10000, MinimumLength = 1)] string Texto);
 public record StatusDto([Required] string Status);
 public record AtribuirDto(string? Email);
+
+public record GerenciarDto([Required] string Status, [Required] string Prioridade, string? Responsavel);
+public record AdminChamadoDto(
+    [Required, StringLength(120, MinimumLength = 3)] string Titulo,
+    [Required, StringLength(10000, MinimumLength = 3)] string Descricao,
+    [Required] string Categoria, [Required] string Prioridade,
+    [Required, EmailAddress, StringLength(254)] string Solicitante);

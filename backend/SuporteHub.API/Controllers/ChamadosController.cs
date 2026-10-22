@@ -15,7 +15,8 @@ public class ChamadosController(IAppStore store, IConfiguration config) : Contro
     static readonly string[] Statuses = ["Aberto", "Em andamento", "Aguardando", "Resolvido"];
     string Email => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
     string Name => User.Identity!.Name!;
-    bool Agent => User.IsInRole("agent");
+    bool Agent => User.IsInRole("agent") || User.IsInRole("admin");
+    Chamado Visible(Chamado t) { if (!Agent) t.NotasInternas = []; return t; }
     static string Key(int id) => $"TICKET#{id:D10}";
     bool Allowed(Chamado t) => Agent || t.Usuario == Email;
     string Uploads => Path.GetFullPath(config["Storage:UploadsPath"] ?? ".local/uploads");
@@ -24,13 +25,13 @@ public class ChamadosController(IAppStore store, IConfiguration config) : Contro
     public async Task<IActionResult> List()
     {
         var tickets = await store.Query<Chamado>("TICKETS");
-        return Ok(tickets.Where(Allowed).OrderByDescending(t => t.DataAtualizacao));
+        return Ok(tickets.Where(Allowed).Select(Visible).OrderByDescending(t => t.DataAtualizacao));
     }
     [HttpGet("{id:int}")]
     public async Task<IActionResult> Get(int id)
     {
         var t = await store.Get<Chamado>("TICKETS", Key(id));
-        return t is null || !Allowed(t.Value.Value) ? NotFound(new { mensagem = "Chamado não encontrado." }) : Ok(t.Value.Value);
+        return t is null || !Allowed(t.Value.Value) ? NotFound(new { mensagem = "Chamado não encontrado." }) : Ok(Visible(t.Value.Value));
     }
     [HttpPost]
     public async Task<IActionResult> Create(CriarChamadoDto dto)
@@ -58,7 +59,7 @@ public class ChamadosController(IAppStore store, IConfiguration config) : Contro
         try { await store.Put("TICKETS", Key(id), t, entry.Value.Version); }
         catch (StorageConflictException) { return Conflict(new { mensagem = "O chamado mudou durante o envio. Atualize a tela e tente novamente." }); }
         catch (InvalidOperationException e) { return BadRequest(new { mensagem = e.Message }); }
-        return Ok(t);
+        return Ok(Visible(t));
     }
 
     [HttpPost("{id:int}/respostas")]
@@ -66,7 +67,7 @@ public class ChamadosController(IAppStore store, IConfiguration config) : Contro
     {
         if (string.IsNullOrWhiteSpace(dto.Texto)) throw new ArgumentException("Escreva sua resposta.");
         if (t.Status == "Resolvido") throw new ArgumentException("Reabra o chamado antes de responder.");
-        t.Historico.Add(new(Name, dto.Texto.Trim(), "resposta", DateTime.UtcNow));
+        t.Historico.Add(new(Name, dto.Texto.Trim(), "resposta", DateTime.UtcNow, Email, User.FindFirstValue(ClaimTypes.Role)));
     });
 
     [HttpPatch("{id:int}/status")]
@@ -75,18 +76,18 @@ public class ChamadosController(IAppStore store, IConfiguration config) : Contro
         if (!Statuses.Contains(dto.Status)) throw new ArgumentException("Status inválido.");
         if (!Agent && dto.Status != "Resolvido") throw new ArgumentException("Apenas agentes podem reabrir ou alterar a etapa do chamado.");
         if (t.Status == dto.Status) return;
-        t.Status = dto.Status;
+        SetStatus(t, dto.Status);
         t.Historico.Add(new(Name, "Status alterado para " + dto.Status + ".", "status", DateTime.UtcNow));
     });
 
-    [Authorize(Roles = "agent"), HttpPatch("{id:int}/responsavel")]
+    [Authorize(Roles = "agent,admin"), HttpPatch("{id:int}/responsavel")]
     public async Task<IActionResult> Assign(int id, AtribuirDto dto)
     {
         Conta? agent = null;
         if (!string.IsNullOrWhiteSpace(dto.Email))
         {
             var entry = await store.Get<Conta>("USERS", dto.Email.Trim().ToLowerInvariant());
-            if (entry is null || entry.Value.Value.Perfil != "agent") return BadRequest(new { mensagem = "Selecione um agente válido." });
+            if (entry is null || entry.Value.Value.Perfil is not ("agent" or "admin")) return BadRequest(new { mensagem = "Selecione um agente válido." });
             agent = entry.Value.Value;
         }
         return await Change(id, t =>
@@ -95,6 +96,54 @@ public class ChamadosController(IAppStore store, IConfiguration config) : Contro
             t.Historico.Add(new(Name, agent is null ? "Responsável removido." : "Chamado atribuído a " + agent.Nome + ".", "atribuicao", DateTime.UtcNow));
         });
     }
+
+    void SetStatus(Chamado t, string status)
+    {
+        t.Status = status;
+        t.DataResolucao = status == "Resolvido" ? DateTime.UtcNow : null;
+        t.ResolvidoPor = status == "Resolvido" ? Email : null;
+        t.NomeResolvidoPor = status == "Resolvido" ? Name : null;
+    }
+
+    [Authorize(Roles = "admin"), HttpPatch("{id:int}/gerenciar")]
+    public async Task<IActionResult> Manage(int id, GerenciarDto dto)
+    {
+        if (!Statuses.Contains(dto.Status) || !Priorities.Contains(dto.Prioridade))
+            return BadRequest(new { mensagem = "Status ou prioridade inválidos." });
+        Conta? responsible = null;
+        if (!string.IsNullOrWhiteSpace(dto.Responsavel))
+        {
+            var entry = await store.Get<Conta>("USERS", dto.Responsavel.Trim().ToLowerInvariant());
+            if (entry is null || entry.Value.Value.Perfil is not ("agent" or "admin"))
+                return BadRequest(new { mensagem = "Selecione um responsável válido." });
+            responsible = entry.Value.Value;
+        }
+        return await Change(id, t =>
+        {
+            if (t.Prioridade != dto.Prioridade)
+            {
+                t.Prioridade = dto.Prioridade;
+                t.Historico.Add(new(Name, "Prioridade alterada para " + dto.Prioridade + ".", "prioridade", DateTime.UtcNow));
+            }
+            if (t.Status != dto.Status)
+            {
+                SetStatus(t, dto.Status);
+                t.Historico.Add(new(Name, "Status alterado para " + dto.Status + ".", "status", DateTime.UtcNow));
+            }
+            if (t.Responsavel != responsible?.Email)
+            {
+                t.Responsavel = responsible?.Email; t.NomeResponsavel = responsible?.Nome;
+                t.Historico.Add(new(Name, responsible is null ? "Responsável removido." : "Chamado atribuído a " + responsible.Nome + ".", "atribuicao", DateTime.UtcNow));
+            }
+        });
+    }
+
+    [Authorize(Roles = "admin"), HttpPost("{id:int}/notas")]
+    public Task<IActionResult> Note(int id, RespostaDto dto) => Change(id, t =>
+    {
+        if (string.IsNullOrWhiteSpace(dto.Texto)) throw new ArgumentException("Escreva a nota interna.");
+        t.NotasInternas.Add(new(Name, dto.Texto.Trim(), "nota", DateTime.UtcNow, Email, "admin"));
+    });
 
     [HttpPost("{id:int}/anexos"), RequestSizeLimit(11 * 1024 * 1024)]
     public async Task<IActionResult> Upload(int id, IFormFile arquivo)
