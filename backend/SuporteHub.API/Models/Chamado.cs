@@ -29,6 +29,12 @@ public class Conta
     public string Email { get; set; } = "";
     public string Nome { get; set; } = "";
     public string SenhaHash { get; set; } = "";
-    public string Perfil { get; set; } = "client";
+    string perfil = "user";
+    // Read legacy accounts without rewriting the database or changing passwords.
+    public string Perfil
+    {
+        get => perfil switch { "agent" => "admin", "client" => "user", _ => perfil };
+        set => perfil = value;
+    }
     public DateTime DataCriacao { get; set; } = DateTime.UtcNow;
 }

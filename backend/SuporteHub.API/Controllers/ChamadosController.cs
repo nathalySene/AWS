@@ -15,10 +15,10 @@ public class ChamadosController(IAppStore store, IConfiguration config) : Contro
     static readonly string[] Statuses = ["Aberto", "Em andamento", "Aguardando", "Resolvido"];
     string Email => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
     string Name => User.Identity!.Name!;
-    bool Agent => User.IsInRole("agent") || User.IsInRole("admin");
-    Chamado Visible(Chamado t) { if (!Agent) t.NotasInternas = []; return t; }
+    bool Admin => User.IsInRole("admin");
+    Chamado Visible(Chamado t) { if (!Admin) t.NotasInternas = []; return t; }
     static string Key(int id) => $"TICKET#{id:D10}";
-    bool Allowed(Chamado t) => Agent || t.Usuario == Email;
+    bool Allowed(Chamado t) => Admin || t.Usuario == Email;
     string Uploads => Path.GetFullPath(config["Storage:UploadsPath"] ?? ".local/uploads");
 
     [HttpGet]
@@ -74,20 +74,20 @@ public class ChamadosController(IAppStore store, IConfiguration config) : Contro
     public Task<IActionResult> Status(int id, StatusDto dto) => Change(id, t =>
     {
         if (!Statuses.Contains(dto.Status)) throw new ArgumentException("Status inválido.");
-        if (!Agent && dto.Status != "Resolvido") throw new ArgumentException("Apenas agentes podem reabrir ou alterar a etapa do chamado.");
+        if (!Admin && dto.Status != "Resolvido") throw new ArgumentException("Apenas administradores podem reabrir ou alterar a etapa do chamado.");
         if (t.Status == dto.Status) return;
         SetStatus(t, dto.Status);
         t.Historico.Add(new(Name, "Status alterado para " + dto.Status + ".", "status", DateTime.UtcNow));
     });
 
-    [Authorize(Roles = "agent,admin"), HttpPatch("{id:int}/responsavel")]
+    [Authorize(Roles = "admin"), HttpPatch("{id:int}/responsavel")]
     public async Task<IActionResult> Assign(int id, AtribuirDto dto)
     {
         Conta? agent = null;
         if (!string.IsNullOrWhiteSpace(dto.Email))
         {
             var entry = await store.Get<Conta>("USERS", dto.Email.Trim().ToLowerInvariant());
-            if (entry is null || entry.Value.Value.Perfil is not ("agent" or "admin")) return BadRequest(new { mensagem = "Selecione um agente válido." });
+            if (entry is null || entry.Value.Value.Perfil != "admin") return BadRequest(new { mensagem = "Selecione um administrador válido." });
             agent = entry.Value.Value;
         }
         return await Change(id, t =>
@@ -114,7 +114,7 @@ public class ChamadosController(IAppStore store, IConfiguration config) : Contro
         if (!string.IsNullOrWhiteSpace(dto.Responsavel))
         {
             var entry = await store.Get<Conta>("USERS", dto.Responsavel.Trim().ToLowerInvariant());
-            if (entry is null || entry.Value.Value.Perfil is not ("agent" or "admin"))
+            if (entry is null || entry.Value.Value.Perfil != "admin")
                 return BadRequest(new { mensagem = "Selecione um responsável válido." });
             responsible = entry.Value.Value;
         }

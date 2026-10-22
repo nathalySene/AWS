@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using SuporteHub.API.Models;
 using SuporteHub.API.Storage;
+using SuporteHub.API.Services;
 using System.Threading.RateLimiting;
 
 // Resolve configuration and frontend from the built application, regardless of cwd.
@@ -45,6 +46,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 {
     o.Cookie.Name = "SuporteHub.Session"; o.Cookie.HttpOnly = true; o.Cookie.SameSite = SameSiteMode.Strict;
     o.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest; o.ExpireTimeSpan = TimeSpan.FromHours(8); o.SlidingExpiration = true;
+    o.Events.OnValidatePrincipal = SessionValidation.Validate;
     o.Events.OnRedirectToLogin = context => { context.Response.StatusCode = 401; return Task.CompletedTask; };
     o.Events.OnRedirectToAccessDenied = context => { context.Response.StatusCode = 403; return Task.CompletedTask; };
 });
@@ -73,7 +75,7 @@ if (args.Contains("--promote-admin"))
 }
 
 // Explicit provisioning command; normal registration can only create customers.
-if (args.Contains("--create-agent") || args.Contains("--create-admin"))
+if (args.Contains("--create-admin"))
 {
     Console.Write("E-mail da nova conta: "); var email = (Console.ReadLine() ?? "").Trim().ToLowerInvariant();
     Console.Write("Nome: "); var name = (Console.ReadLine() ?? "").Trim();
@@ -83,10 +85,10 @@ if (args.Contains("--create-agent") || args.Contains("--create-admin"))
     else { for (ConsoleKeyInfo key; (key = Console.ReadKey(true)).Key != ConsoleKey.Enter;) { if (key.Key == ConsoleKey.Backspace) { if (password.Length > 0) password = password[..^1]; } else if (!char.IsControl(key.KeyChar)) password += key.KeyChar; } Console.WriteLine(); }
     if (!new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(email) || email.Length > 254 || name.Length is < 2 or > 100 || password.Length is < 10 or > 128)
         throw new InvalidOperationException("E-mail, nome ou senha inválidos.");
-    var account = new Conta { Email = email, Nome = name, Perfil = args.Contains("--create-admin") ? "admin" : "agent" };
+    var account = new Conta { Email = email, Nome = name, Perfil = "admin" };
     account.SenhaHash = app.Services.GetRequiredService<PasswordHasher<Conta>>().HashPassword(account, password);
     await store.Put("USERS", email, account);
-    Console.WriteLine(args.Contains("--create-admin") ? "Administrador criado." : "Agente criado."); return;
+    Console.WriteLine("Administrador criado."); return;
 }
 
 app.UseExceptionHandler(handler => handler.Run(async context =>

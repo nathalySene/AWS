@@ -16,9 +16,9 @@ Esse comando restaura os pacotes necessários, compila o projeto e inicia a apli
 
 Não execute `bash scripts/start.sh` nem `docker compose` para esse modo. Se já baixou uma versão anterior que exigia Docker, obtenha os arquivos atualizados da branch `suportehub-funcional` antes de executar o comando acima.
 
-Abra a tela de cadastro: se o banco local estiver vazio, a primeira conta será a conta de suporte. Escolha seu nome, e-mail e senha. As contas seguintes serão clientes. Saia e crie outra conta para testar o fluxo do cliente e entre novamente com a conta de suporte para atender o chamado.
+Abra a tela de cadastro: se o banco local estiver vazio, a primeira conta será de Administrador. Escolha seu nome, e-mail e senha. As contas seguintes serão de Usuário. Saia e crie outra conta para testar o fluxo do usuário e entre novamente com a conta de administrador para atender o chamado.
 
-A criação da primeira conta usa uma transação para permitir apenas uma conta inicial de suporte, inclusive com cadastros simultâneos. Na AWS, o cadastro público continua criando apenas clientes.
+A criação da primeira conta usa uma transação para permitir apenas uma conta inicial de administrador, inclusive com cadastros simultâneos. Na AWS, o cadastro público continua criando apenas usuários.
 
 ## Linux/macOS e ambiente na nuvem
 
@@ -71,20 +71,20 @@ Mantenha `wwwroot/` junto da DLL. Esse comando gera os arquivos da aplicação; 
 
 ## Funcionalidades
 
-- Cadastro de clientes, login com senha verificada e sessão em cookie HttpOnly.
+- Cadastro de usuários, login com senha verificada e sessão em cookie HttpOnly.
 - Criação de chamados, busca, filtros, paginação e consulta de detalhes.
-- Histórico com respostas do cliente e do agente.
+- Histórico com respostas do usuário e do administrador.
 - Upload e download de PNG, JPG e PDF de até 10 MB, até 20 anexos por chamado.
-- Atribuição e transferência para agentes, atualização de status e reabertura pelo agente.
-- Painel com contagens reais, fila geral, fila pessoal, equipe e relatórios com filtro de período e exportação CSV.
+- Atribuição e transferência para administradores, atualização de status e reabertura pelo administrador.
+- Painel com contagens reais, fila geral, fila pessoal, usuários e relatórios com filtro de período e exportação CSV.
 - Área de administrador com gerenciamento conjunto, notas privadas, atendidos e relatórios para impressão em PDF.
-- Autorização na API: clientes acessam apenas seus próprios chamados; agentes têm acesso à operação de suporte. O solicitante vem da sessão, nunca de um e-mail enviado no formulário.
+- Autorização na API: usuários acessam apenas seus próprios chamados; administradores têm acesso à operação de suporte. O solicitante vem da sessão, nunca de um e-mail enviado no formulário.
 
 Não há login Google nem envio de e-mails para recuperação de senha. Não existem contas ou senhas padrão. Os testes usam bancos separados e não criam contas no banco local da aplicação.
 
 ## Administração
 
-A área administrativa inclui lista e filtros de chamados, abertura em nome do solicitante, notas internas, gerenciamento de prioridade/responsável/status, atendidos, equipe e relatórios CSV/PDF. Não inclui avaliação. Para ativar o perfil de uma conta existente e conhecer os critérios dos relatórios, siga [docs/ADMIN.md](docs/ADMIN.md).
+A área administrativa inclui lista e filtros de chamados, abertura em nome do solicitante, notas internas, gerenciamento de prioridade/responsável/status, atendidos, usuários e relatórios CSV/PDF. Não inclui avaliação. Há somente dois perfis, Administrador e Usuário, com um único login. Contas antigas de suporte são reconhecidas como Administrador; contas de cliente, como Usuário. Para consultar o acesso inicial e os critérios dos relatórios, siga [docs/ADMIN.md](docs/ADMIN.md).
 
 ## Opção: usar a tabela AWS existente
 
@@ -134,12 +134,12 @@ A tabela deve ter chaves string `PK` e `SK`, como no template `infra/dynamodb.ym
 
 As entidades são armazenadas em `Data` (JSON) e `Version` (número), com condição de versão nas atualizações. O contador usa `UpdateItem` atômico. A aplicação não apaga nem migra registros existentes. A estrutura atual da tabela real ainda não pôde ser inspecionada. Os GSIs do template não são usados nesta versão; a API consulta as partições `USERS` e `TICKETS` e filtra no servidor.
 
-## Criar outros agentes
+## Administrador e Usuário
 
-No SQLite vazio, o primeiro cadastro pela interface cria a conta de suporte. Para agentes adicionais ou para o primeiro agente na AWS, use o comando administrativo com as mesmas configurações de banco usadas pela API:
+No SQLite vazio, o primeiro cadastro pela interface cria a conta de administrador. Para cadastrar outras contas, use **Usuários** na área administrativa. Para criar o primeiro administrador na AWS, use o comando administrativo com as mesmas configurações de banco usadas pela API:
 
 ```powershell
-dotnet backend/SuporteHub.API/bin/Debug/net10.0/SuporteHub.API.dll --create-agent
+dotnet backend/SuporteHub.API/bin/Debug/net10.0/SuporteHub.API.dll --create-admin
 ```
 
 Antes do comando, configure o provedor e os caminhos apropriados. Para SQLite, na raiz do repositório:
@@ -156,8 +156,8 @@ Para AWS, use as variáveis e a identidade da seção anterior. O comando pede e
 | Método | Rota | Uso |
 |---|---|---|
 | GET | `/api/health` | Leitura de prontidão do banco configurado |
-| GET | `/api/auth/setup` | Informa se o modo local aguarda a primeira conta de suporte |
-| POST | `/api/auth/cadastro` | Cadastro de cliente, ou primeira conta de suporte no banco local vazio |
+| GET | `/api/auth/setup` | Informa se o modo local aguarda a primeira conta de administrador |
+| POST | `/api/auth/cadastro` | Cadastro de usuário, ou primeira conta de administrador no banco local vazio |
 | POST | `/api/auth/login` | Login |
 | GET | `/api/auth/me` | Conta autenticada |
 | POST | `/api/auth/logout` | Encerrar sessão |
@@ -165,16 +165,16 @@ Para AWS, use as variáveis e a identidade da seção anterior. O comando pede e
 | GET | `/api/admin/usuarios` | Solicitantes cadastrados (administrador) |
 | GET | `/api/admin/solicitantes/{email}` | Dados e contagens do solicitante (administrador) |
 | POST | `/api/admin/chamados` | Abrir em nome de um solicitante (administrador) |
-| POST | `/api/admin/equipe` | Cadastrar agente (administrador) |
+| POST | `/api/admin/usuarios` | Cadastrar Usuário ou Administrador (apenas administrador) |
 | PATCH | `/api/chamados/{id}/gerenciar` | Salvar responsável, prioridade e status juntos (administrador) |
 | POST | `/api/chamados/{id}/notas` | Adicionar nota interna (administrador) |
 | GET | `/api/chamados/{id}` | Detalhes autorizados |
 | POST | `/api/chamados/{id}/respostas` | Adicionar resposta |
-| PATCH | `/api/chamados/{id}/status` | Alterar status; cliente pode resolver seu chamado |
-| PATCH | `/api/chamados/{id}/responsavel` | Atribuir agente (apenas agentes) |
+| PATCH | `/api/chamados/{id}/status` | Alterar status; usuário pode resolver seu chamado |
+| PATCH | `/api/chamados/{id}/responsavel` | Atribuir administrador (apenas administradores) |
 | POST | `/api/chamados/{id}/anexos` | Upload multipart, campo `arquivo` |
 | GET | `/api/chamados/{id}/anexos/{fileId}` | Download autorizado |
-| GET | `/api/equipe` | Agentes cadastrados (apenas agentes) |
+| GET | `/api/equipe` | Administradores cadastrados (apenas administradores) |
 
 Requisições que modificam dados exigem `X-Requested-With: SuporteHub`. Não há CORS para outras origens. O cookie é HttpOnly e SameSite Strict; é Secure quando a conexão usa HTTPS. O login possui limitação de tentativas. Senhas são armazenadas com o `PasswordHasher` do ASP.NET Core; senhas e tokens não ficam em web storage. O OpenAPI fica em `/openapi/v1.json` no ambiente Development.
 
@@ -190,6 +190,6 @@ python3 tests/admin.py
 
 Os testes criam arquivos SQLite temporários e contas de teste, sem usar o banco da aplicação nem a tabela AWS. O teste Python usa somente sua biblioteca padrão; o teste de navegador exige Playwright e Chromium (`CHROMIUM_BIN` permite indicar outro executável). Ambos aceitam `DOTNET_BIN` para localizar o SDK.
 
-A cobertura inclui inicialização da conta de suporte sem duplicidade, autenticação e autorização, isolamento entre clientes, respostas, arquivos, atribuição, status, IDs concorrentes e persistência após reinício. O navegador também valida busca, recuperação de erro, fila pessoal, equipe, relatórios e escape de HTML.
+A cobertura inclui inicialização da conta de administrador sem duplicidade, autenticação e autorização, isolamento entre usuários, respostas, arquivos, atribuição, status, IDs concorrentes e persistência após reinício. O navegador também valida busca, recuperação de erro, áreas por perfil, usuários, relatórios e escape de HTML.
 
 Os pacotes `Microsoft.Data.Sqlite` e `Microsoft.AspNetCore.OpenApi` foram atualizados para 10.0.13. A compilação validada terminou sem avisos, e a auditoria NuGet não encontrou vulnerabilidades conhecidas nas dependências consultadas. Para verificar novamente, execute `dotnet list backend/SuporteHub.API/SuporteHub.API.csproj package --vulnerable --include-transitive`.

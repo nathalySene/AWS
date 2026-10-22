@@ -25,11 +25,12 @@ public class AdminController(IAppStore store, PasswordHasher<Conta> hasher) : Co
         return Ok(new { c.Nome, c.Email, c.DataCriacao, chamados = tickets.Count, resolvidos = tickets.Count(t => t.Status == "Resolvido") });
     }
 
-    [HttpPost("equipe"), EnableRateLimiting("auth")]
-    public async Task<IActionResult> AddAgent(CadastroDto dto)
+    [HttpPost("usuarios"), EnableRateLimiting("auth")]
+    public async Task<IActionResult> AddUser(CadastroAdministrativoDto dto)
     {
         if (string.IsNullOrWhiteSpace(dto.Nome) || dto.Nome.Trim().Length < 2) return BadRequest(new { mensagem = "Informe o nome." });
-        var c = new Conta { Email = dto.Email.Trim().ToLowerInvariant(), Nome = dto.Nome.Trim(), Perfil = "agent" };
+        if (dto.Perfil is not ("admin" or "user")) return BadRequest(new { mensagem = "Escolha Administrador ou Usuário." });
+        var c = new Conta { Email = dto.Email.Trim().ToLowerInvariant(), Nome = dto.Nome.Trim(), Perfil = dto.Perfil };
         c.SenhaHash = hasher.HashPassword(c, dto.Senha);
         try { await store.Put("USERS", c.Email, c); }
         catch (StorageConflictException) { return Conflict(new { mensagem = "Já existe uma conta com esse e-mail." }); }

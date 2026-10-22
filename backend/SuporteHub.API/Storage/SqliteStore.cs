@@ -76,10 +76,10 @@ public sealed class SqliteStore : IAppStore
         await using var connection = await Open();
         // Acquire the write lock before deciding who gets the initial support role.
         using var transaction = connection.BeginTransaction(deferred: false);
-        account.Perfil = "client";
+        account.Perfil = "user";
         if (IsLocal && await EmptyForSetup(connection, transaction))
         {
-            account.Perfil = "agent";
+            account.Perfil = "admin";
             await Insert(connection, transaction, "META", "INITIAL_AGENT", "{}");
         }
         await Insert(connection, transaction, "USERS", account.Email, Serialize(account));

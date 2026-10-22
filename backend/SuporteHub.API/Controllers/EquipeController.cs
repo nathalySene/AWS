@@ -4,10 +4,10 @@ using SuporteHub.API.Models;
 using SuporteHub.API.Storage;
 namespace SuporteHub.API.Controllers;
 
-[ApiController, Authorize(Roles = "agent,admin"), Route("api/equipe")]
+[ApiController, Authorize(Roles = "admin"), Route("api/equipe")]
 public class EquipeController(IAppStore store) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List() => Ok((await store.Query<Conta>("USERS"))
-        .Where(c => c.Perfil is "agent" or "admin").Select(AuthController.Public));
+        .Where(c => c.Perfil == "admin").Select(AuthController.Public));
 }

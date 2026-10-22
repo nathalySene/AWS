@@ -21,3 +21,9 @@ public record AdminChamadoDto(
     [Required, StringLength(10000, MinimumLength = 3)] string Descricao,
     [Required] string Categoria, [Required] string Prioridade,
     [Required, EmailAddress, StringLength(254)] string Solicitante);
+
+public record CadastroAdministrativoDto(
+    [Required, StringLength(100, MinimumLength = 2)] string Nome,
+    [Required, EmailAddress, StringLength(254)] string Email,
+    [Required, StringLength(128, MinimumLength = 10)] string Senha,
+    [Required] string Perfil);

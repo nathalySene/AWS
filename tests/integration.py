@@ -60,7 +60,7 @@ class PersistenceTests(unittest.TestCase):
             'Storage__KeysPath': cls.state.name + '/keys', 'Storage__UploadsPath': cls.state.name + '/uploads'}
         cls.password = secrets.token_urlsafe(24)
         # stdin is used so the test password never appears in process arguments or logs.
-        result = subprocess.run([DOTNET, str(DLL), '--create-agent'], cwd=PROJECT, env=cls.env,
+        result = subprocess.run([DOTNET, str(DLL), '--create-admin'], cwd=PROJECT, env=cls.env,
             input=f'agente@example.com\nAgente Teste\n{cls.password}\n', text=True, capture_output=True, timeout=30)
         if result.returncode:
             raise RuntimeError('Agent provisioning failed: ' + result.stdout + result.stderr)
@@ -97,8 +97,8 @@ class PersistenceTests(unittest.TestCase):
     def account(self):
         client = Client(self.base)
         email = uuid.uuid4().hex + '@example.com'
-        status, result = client.request('/api/auth/cadastro', {'nome': 'Cliente Teste', 'email': email, 'senha': self.password, 'perfil': 'agent'})
-        self.assertEqual(status, 201); self.assertEqual(result['perfil'], 'client')
+        status, result = client.request('/api/auth/cadastro', {'nome': 'Cliente Teste', 'email': email, 'senha': self.password, 'perfil': 'admin'})
+        self.assertEqual(status, 201); self.assertEqual(result['perfil'], 'user')
         return client, email
 
     def ticket(self, client):
@@ -151,10 +151,10 @@ class PersistenceTests(unittest.TestCase):
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
                 results = list(pool.map(register, range(2)))
             self.assertTrue(all(status in (201, 409) for status, _ in results))
-            self.assertEqual(sum(status == 201 and data['perfil'] == 'agent' for status, data in results), 1)
+            self.assertEqual(sum(status == 201 and data['perfil'] == 'admin' for status, data in results), 1)
             self.assertEqual(client.request('/api/auth/setup')[1], {'primeiroAcesso': False})
-            status, data = client.request('/api/auth/cadastro', {'nome': 'Cliente Seguinte', 'email': 'next@example.com', 'senha': self.password, 'perfil': 'agent'})
-            self.assertEqual((status, data['perfil']), (201, 'client'))
+            status, data = client.request('/api/auth/cadastro', {'nome': 'Cliente Seguinte', 'email': 'next@example.com', 'senha': self.password, 'perfil': 'admin'})
+            self.assertEqual((status, data['perfil']), (201, 'user'))
             process.terminate(); process.wait(timeout=15)
             process = subprocess.Popen([DOTNET, str(DLL)], cwd=PROJECT, env=env, stdout=self.log, stderr=subprocess.STDOUT)
             for _ in range(100):

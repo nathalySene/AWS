@@ -1,59 +1,74 @@
-# Área do administrador
+# Administrador e Usuário
 
-A área segue as telas enviadas em PNG: lista de chamados, chamado e solicitante, atendidos e relatórios. Não inclui avaliação, estrelas, notas de satisfação ou seus indicadores. Os nomes e números mostrados vêm do banco; os exemplos do desenho não são cadastrados automaticamente.
+O sistema tem somente dois perfis e uma única tela de login:
 
-## Acessar no Windows
+| Perfil | Acesso |
+|---|---|
+| Administrador | Todos os chamados, atribuição, prioridade, status, notas internas, relatórios e cadastro de contas |
+| Usuário | Abrir chamados, acompanhar os próprios chamados, enviar respostas e anexos e marcar o próprio chamado como resolvido |
 
-Se já possui uma conta, pare a aplicação com `Ctrl+C`. Na raiz que contém `backend`, execute no PowerShell:
+O perfil é identificado pelo servidor após informar e-mail e senha. Não existe seleção de perfil no login. O cadastro público nunca permite escolher administração.
 
-```powershell
-dotnet run --project backend/SuporteHub.API/SuporteHub.API.csproj --launch-profile http -- --promote-admin
-```
+## Começar
 
-Informe o e-mail da conta existente no terminal. Esse comando altera somente o perfil dessa conta no banco configurado, preservando senha e chamados. Não há promoção de perfil pelo cadastro público ou por uma rota HTTP.
-
-Inicie a aplicação novamente:
+Na raiz do projeto, no PowerShell:
 
 ```powershell
 dotnet run --project backend/SuporteHub.API/SuporteHub.API.csproj --launch-profile http
 ```
 
-Abra `http://localhost:5218`, saia de qualquer sessão anterior e entre com seu e-mail e senha. O menu mostrará **Área do administrador**, com Painel, Chamados, Atendidos, Relatórios e Equipe.
+Abra `http://localhost:5218`. No banco SQLite local Development vazio, a primeira conta cadastrada será **Administrador**. Os próximos cadastros serão **Usuário**. Na AWS ou fora de Development, o cadastro público cria somente usuários; o primeiro administrador deve ser criado por um operador com acesso ao servidor.
 
-Se ainda não tem conta, faça o cadastro antes de executar a promoção. A primeira conta de um banco local Development vazio continua sendo de suporte; as demais são clientes. Contas existentes não recebem administração automaticamente.
+O administrador entra em **Visão geral** e tem acesso a Chamados, Atendidos, Relatórios e Usuários. O usuário entra em **Meus chamados** e tem acesso a Novo chamado.
 
-Para criar um administrador novo, sem substituir uma conta existente:
+## Contas de versões antigas
+
+As contas antes chamadas de suporte/agente são reconhecidas como **Administrador**. As contas antes chamadas de cliente são reconhecidas como **Usuário**. Senhas, e-mails, nomes, chamados, histórico e anexos são preservados.
+
+Essa compatibilidade é aplicada ao ler a conta, sem reescrever o banco inteiro ou migrar uma tabela AWS na inicialização. Quando uma conta é gravada novamente, seu perfil é salvo no formato atual (`admin` ou `user`). Sessões antigas com nomes de perfil anteriores precisam fazer login novamente.
+
+Com a aplicação parada, preserve a pasta `.local` ao atualizar. Não substitua seu banco por um banco vazio.
+
+## Cadastrar contas
+
+Na área do administrador, abra **Usuários**. É possível buscar por nome ou e-mail, filtrar por perfil e usar **Adicionar conta**. Informe nome, e-mail, senha inicial (10–128 caracteres) e o perfil:
+
+- **Usuário** é a opção padrão, para quem precisa abrir e acompanhar chamados.
+- **Administrador** concede acesso a todos os chamados e ao cadastro de outras contas.
+
+Não existem senhas padrão. Contas cadastradas nessa tela usam o mesmo login. E-mails duplicados são recusados. Os hashes das senhas não são exibidos nem retornados pela API.
+
+## Tornar uma conta existente administradora
+
+Pare a aplicação com `Ctrl+C` e execute, usando o mesmo banco configurado para a aplicação:
+
+```powershell
+dotnet run --project backend/SuporteHub.API/SuporteHub.API.csproj --launch-profile http -- --promote-admin
+```
+
+Informe o e-mail já cadastrado. A senha e os chamados são mantidos. Inicie a aplicação e entre novamente.
+
+Para criar o primeiro administrador de um ambiente sem cadastro inicial local:
 
 ```powershell
 dotnet run --project backend/SuporteHub.API/SuporteHub.API.csproj --launch-profile http -- --create-admin
 ```
 
-Informe e-mail, nome e uma senha de 10 a 128 caracteres. A senha fica oculta na entrada interativa. Se o e-mail já existir, use `--promote-admin`. Esses comandos exigem acesso ao servidor; não existem credenciais padrão.
+Informe e-mail, nome e senha no terminal. A senha fica oculta na entrada interativa. Esses comandos exigem acesso ao servidor e não são rotas públicas.
 
-## Funções
+## Chamados e relatórios
 
-- **Chamados:** todos, pendentes (abertos e aguardando), em andamento e atendidos; busca por número, assunto, nome ou e-mail; filtros por prioridade, responsável e período; paginação de seis itens; exportação CSV dos resultados filtrados.
-- **Novo chamado:** seleção de um solicitante já cadastrado, assunto, categoria, prioridade, descrição e anexos. O histórico identifica quem abriu o chamado em nome do solicitante.
-- **Detalhe:** descrição, anexos, conversa, informações reais do solicitante e suas contagens de chamados. O layout não inventa cargo, departamento, telefone ou unidade, pois esses dados não são coletados no cadastro atual.
-- **Gerenciar:** responsável, prioridade e status são salvos juntos em uma escrita condicionada à versão do registro, com histórico das alterações. Resolver e reabrir são ações rápidas. Reabrir limpa a última data de resolução; resolver novamente registra a nova conclusão.
-- **Conversa:** resposta pública e nota interna são ações separadas. Notas internas ficam disponíveis apenas para suporte e administração e não aparecem nas respostas da API para clientes. Respostas e anexos de chamados resolvidos exigem reabertura; notas internas ainda podem ser acrescentadas.
-- **Atendidos:** contagem, tempo médio de resolução, solicitante, pessoa que resolveu, data, duração, filtros, paginação e CSV. A pessoa que resolveu fica registrada independentemente de transferências posteriores.
-- **Relatórios:** quantidade aberta no período, tempo médio até a primeira resposta da equipe, taxa de resolução, atendimentos por integrante, status, categorias, assuntos e série diária. Exportação CSV e **Exportar PDF**, que abre a impressão do navegador; escolha **Salvar como PDF** como destino.
-- **Equipe:** carga atual, quantidade resolvida e cadastro de agentes com senha inicial. Esta tela cria somente agentes, sem conceder administração.
+Chamados permite busca, filtros, paginação, exportação CSV e abertura em nome de um usuário cadastrado. O administrador pode salvar responsável, prioridade e status juntos; apenas administradores podem receber a atribuição. O histórico registra as alterações. Notas internas são visíveis somente aos administradores e ficam ocultas nas respostas da API para usuários.
 
-Os relatórios usam a data de abertura como filtro do conjunto. A taxa de resolução é o número de chamados atualmente resolvidos dividido pelo total aberto no período. O gráfico diário mostra as aberturas e últimas resoluções desse conjunto nos últimos sete dias. O ranking contabiliza quem efetivamente resolveu; resoluções pelo próprio cliente não são atribuídas a um agente.
+Atendidos mostra a pessoa que resolveu, a data e o tempo da última resolução. Reabrir limpa esses dados; resolver novamente registra a nova conclusão. Não há avaliação, estrelas ou indicadores de satisfação.
 
-Datas de resolução e autoria das respostas passam a ser registradas a partir desta versão. Registros antigos sem esses dados mostram `—` e não entram nas médias de tempo. Atendidos antigos sem data aparecem ao selecionar **Todo o período**. Não é usada a data da última alteração como substituta da resolução.
+Relatórios usa a data de abertura como filtro. A taxa de resolução é a quantidade atualmente resolvida dividida pelo total aberto no período. A primeira resposta considera somente mensagens públicas da administração. O gráfico diário usa os mesmos chamados selecionados. O ranking conta quem efetivamente resolveu; resoluções pelo próprio usuário não são atribuídas a um administrador.
 
-## Banco e permissões
+Registros antigos sem datas/autoria mostram `—` e não entram nas médias de tempo. Atendidos sem data de resolução aparecem em **Todo o período**. A data da última atualização não é usada como substituta da resolução.
 
-O modo local continua usando `.local/suportehub.db`, sem Docker ou serviços Google/e-mail. Os campos novos são armazenados no JSON de cada chamado; registros anteriores continuam legíveis e não precisam de migração destrutiva. Faça backup de `.local/` com a aplicação parada antes de atualizar.
+**Exportar PDF** abre a impressão do navegador; selecione **Salvar como PDF**. O CSV usa os resultados filtrados e protege células que poderiam ser interpretadas como fórmulas.
 
-As rotas `/api/admin/*`, `/api/chamados/{id}/gerenciar` e `/api/chamados/{id}/notas` exigem o perfil `admin`. Clientes mantêm acesso apenas aos seus próprios chamados. Agentes continuam com os fluxos de suporte anteriores e podem consultar notas internas; não podem cadastrar equipe nem usar rotas administrativas. Senhas e hashes não são retornados nos dados de usuários.
-
-A opção AWS continua disponível, mas esses comandos só afetam a AWS se o processo estiver explicitamente configurado para DynamoDB e tiver uma identidade IAM válida. Os testes desta implementação usam SQLite temporário; a tabela AWS existente não foi modificada ou validada.
-
-## Verificar
+## Verificação
 
 ```bash
 dotnet build backend/SuporteHub.API/SuporteHub.API.csproj
@@ -62,4 +77,4 @@ node tests/browser.cjs
 python3 tests/admin.py
 ```
 
-`tests/admin.py` exige Python Playwright e Chromium. Ele testa permissões, notas privadas, histórico, resolução/reabertura, persistência, cadastro da equipe e o fluxo real no navegador, incluindo CSV, impressão PDF e tela móvel. Usa banco e contas temporários separados dos dados reais. `DOTNET_BIN` e `CHROMIUM_BIN` permitem indicar os executáveis.
+Os testes usam SQLite, contas e arquivos temporários separados dos dados reais. Playwright e Chromium são necessários para os testes de navegador. `DOTNET_BIN` e `CHROMIUM_BIN` permitem indicar os executáveis. Não foi necessário criar serviços Google/e-mail, instalar Docker ou modificar a tabela AWS existente.

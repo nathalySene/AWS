@@ -20,18 +20,19 @@ public class DynamoStore(IAmazonDynamoDB db, IConfiguration config) : IAppStore
 
     public async Task Register(Conta account)
     {
+        account.Perfil = "user";
         if (!await NeedsInitialAgent())
         {
             await Put("USERS", account.Email, account);
             return;
         }
-        account.Perfil = "agent";
+        account.Perfil = "admin";
         var item = Key("USERS", account.Email);
         item["Data"] = new(JsonSerializer.Serialize(account));
         item["Version"] = new() { N = "1" };
         var marker = Key("META", "INITIAL_AGENT");
         marker["Data"] = new("{}"); marker["Version"] = new() { N = "1" };
-        // Exactly one first local registration can claim the support role.
+        // Exactly one first local registration can claim the administrator role.
         try { await db.TransactWriteItemsAsync(new TransactWriteItemsRequest
         {
             TransactItems = [

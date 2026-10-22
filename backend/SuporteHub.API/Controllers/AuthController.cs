@@ -46,7 +46,7 @@ public class AuthController(IAppStore store, PasswordHasher<Conta> hasher) : Con
         // Always perform password hashing to avoid a fast path for unknown accounts.
         var hash = record is null ? hasher.HashPassword(c, "unavailable-account") : c.SenhaHash;
         var result = hasher.VerifyHashedPassword(c, hash, dto.Senha);
-        if (record is null || result == PasswordVerificationResult.Failed) return Unauthorized(new { mensagem = "E-mail ou senha inválidos." });
+        if (record is null || c.Perfil is not ("admin" or "user") || result == PasswordVerificationResult.Failed) return Unauthorized(new { mensagem = "E-mail ou senha inválidos." });
         if (result == PasswordVerificationResult.SuccessRehashNeeded)
         {
             c.SenhaHash = hasher.HashPassword(c, dto.Senha);

@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sqlite3
 import unittest
 from urllib.parse import quote
 from integration import Client, DOTNET, DLL, ROOT, PROJECT
@@ -39,10 +40,10 @@ class AdminTests(unittest.TestCase):
     def test_01_permissions_and_public_signup_cannot_claim_admin(self):
         customer, email = self.customer()
         agent = self.login('agente@example.com')
-        for client, expected in [(Client(self.base), 401), (customer, 403), (agent, 403)]:
+        for client, expected in [(Client(self.base), 401), (customer, 403)]:
             self.assertEqual(client.request('/api/admin/usuarios')[0], expected)
-            self.assertEqual(client.request('/api/admin/equipe', {'nome': 'Teste', 'email': 'nao@example.com', 'senha': self.password})[0], expected)
-        self.assertEqual(customer.request('/api/auth/me')[1]['perfil'], 'client')
+            self.assertEqual(client.request('/api/admin/usuarios', {'nome': 'Teste', 'email': 'nao@example.com', 'senha': self.password, 'perfil': 'admin'})[0], expected)
+        self.assertEqual(customer.request('/api/auth/me')[1]['perfil'], 'user')
         admin = self.login()
         status, users = admin.request('/api/admin/usuarios')
         self.assertEqual(status, 200)
@@ -80,13 +81,17 @@ class AdminTests(unittest.TestCase):
         status, reopened = admin.request(f'/api/chamados/{tid}/status', {'status': 'Aberto'}, 'PATCH')
         self.assertEqual(status, 200); self.assertIsNone(reopened['dataResolucao']); self.assertIsNone(reopened['resolvidoPor'])
 
-    def test_03_create_team_and_duplicate_rejected(self):
+    def test_03_create_accounts_with_two_profiles_and_reject_invalid_role(self):
         admin = self.login()
-        body = {'nome': 'Agente Novo', 'email': 'novo@example.com', 'senha': self.password, 'perfil': 'admin'}
-        status, account = admin.request('/api/admin/equipe', body)
-        self.assertEqual(status, 201); self.assertEqual(account['perfil'], 'agent')
-        self.assertEqual(admin.request('/api/admin/equipe', body)[0], 409)
+        body = {'nome': 'Agente Novo', 'email': 'novo@example.com', 'senha': self.password, 'perfil': 'user'}
+        status, account = admin.request('/api/admin/usuarios', body)
+        self.assertEqual(status, 201); self.assertEqual(account['perfil'], 'user')
+        self.assertEqual(admin.request('/api/admin/usuarios', body)[0], 409)
         self.assertEqual(self.login('novo@example.com').request('/api/admin/usuarios')[0], 403)
+        status, created = admin.request('/api/admin/usuarios', {**body, 'email': 'novo-admin@example.com', 'perfil': 'admin'})
+        self.assertEqual(status, 201); self.assertEqual(created['perfil'], 'admin')
+        self.assertEqual(self.login('novo-admin@example.com').request('/api/admin/usuarios')[0], 200)
+        self.assertEqual(admin.request('/api/admin/usuarios', {**body, 'email': 'invalido@example.com', 'perfil': 'agent'})[0], 400)
 
     def test_04_actual_browser_admin_workflow(self):
         from playwright.sync_api import sync_playwright
@@ -131,9 +136,9 @@ class AdminTests(unittest.TestCase):
                 if os.environ.get('ADMIN_SCREENSHOT'): page.screenshot(path=os.environ['ADMIN_SCREENSHOT'], full_page=True)
                 page.set_viewport_size({'width':390,'height':844}); page.goto(self.base+'/#/admin-relatorios'); page.locator('.donut').wait_for()
                 self.assertTrue(page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'))
-                page.goto(self.base+'/#/equipe'); page.locator('#agentName').fill('Agente pela tela')
-                page.locator('#agentEmail').fill('agente-tela@example.com'); page.locator('#agentPassword').fill(self.password)
-                page.locator('#addAgent [type=submit]').click(); page.get_by_text('Agente pela tela', exact=True).wait_for()
+                page.goto(self.base+'/#/usuarios'); page.locator('#accountName').fill('Usuário pela tela')
+                page.locator('#accountEmail').fill('agente-tela@example.com'); page.locator('#accountPassword').fill(self.password)
+                page.locator('#addUser [type=submit]').click(); page.get_by_text('Usuário pela tela', exact=True).wait_for()
                 for _ in range(7): self.new_ticket(admin, email)
                 page.goto(self.base+'/#/admin-chamados'); page.locator('#q').fill('Problema de acesso administrativo')
                 page.locator('#lt a.row').first.wait_for(); self.assertEqual(page.locator('#lt a.row').count(), 6)
@@ -149,10 +154,38 @@ class AdminTests(unittest.TestCase):
         result = subprocess.run([DOTNET, str(DLL), '--promote-admin'], cwd=PROJECT, env=self.fixture.env,
                                 input=email+'\n', text=True, capture_output=True, timeout=30)
         self.assertEqual(result.returncode, 0)
+        self.assertEqual(owner.request('/api/auth/me')[0], 401)
         promoted = self.login(email)
         self.assertEqual(promoted.request('/api/auth/me')[1]['perfil'], 'admin')
         self.assertEqual(promoted.request(f'/api/chamados/{ticket["id"]}')[1]['usuario'], email)
         self.assertEqual(promoted.request('/api/admin/usuarios')[0], 200)
+
+    def test_06_legacy_accounts_keep_credentials_and_records(self):
+        owner, email = self.customer()
+        ticket = support.PersistenceTests().ticket(owner)
+        result = subprocess.run([DOTNET, str(DLL), '--create-admin'], cwd=PROJECT, env=self.fixture.env,
+                                input=f'legacy-admin@example.com\nAdministrador Antigo\n{self.password}\n', text=True, capture_output=True, timeout=30)
+        self.assertEqual(result.returncode, 0)
+        self.fixture.stop()
+        database = self.fixture.env['Storage__DatabasePath']
+        hashes = {}
+        with sqlite3.connect(database) as db:
+            for address, old_role in [(email, 'client'), ('legacy-admin@example.com', 'agent')]:
+                payload = json.loads(db.execute("SELECT Data FROM Records WHERE PK='USERS' AND SK=?", (address,)).fetchone()[0])
+                hashes[address] = payload['SenhaHash']; payload['Perfil'] = old_role
+                db.execute("UPDATE Records SET Data=?, Version=Version+1 WHERE PK='USERS' AND SK=?", (json.dumps(payload), address))
+        self.fixture.start()
+        legacy_user = self.login(email); legacy_admin = self.login('legacy-admin@example.com')
+        self.assertEqual(legacy_user.request('/api/auth/me')[1]['perfil'], 'user')
+        self.assertEqual(legacy_admin.request('/api/auth/me')[1]['perfil'], 'admin')
+        self.assertEqual(legacy_admin.request('/api/admin/usuarios')[0], 200)
+        self.assertEqual(legacy_user.request('/api/admin/usuarios')[0], 403)
+        self.assertEqual(legacy_user.request(f'/api/chamados/{ticket["id"]}')[1]['usuario'], email)
+        with sqlite3.connect(database) as db:
+            for address, old_role in [(email, 'client'), ('legacy-admin@example.com', 'agent')]:
+                payload = json.loads(db.execute("SELECT Data FROM Records WHERE PK='USERS' AND SK=?", (address,)).fetchone()[0])
+                self.assertEqual(payload['SenhaHash'], hashes[address])
+                self.assertEqual(payload['Perfil'], old_role)  # no bulk startup rewrite
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
