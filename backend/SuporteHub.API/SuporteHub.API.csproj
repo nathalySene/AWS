@@ -2,7 +2,6 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <UserSecretsId>SuporteHub-Development</UserSecretsId>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- The frontend is copied as ordinary files and served by UseStaticFiles. -->
@@ -10,7 +9,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="10.0.13" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.13" />
     <PackageReference Include="AWSSDK.DynamoDBv2" Version="4.0.108" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.13" />

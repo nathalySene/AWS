@@ -11,9 +11,7 @@
         "Storage__KeysPath": "../../.local/keys",
         "Storage__UploadsPath": "../../.local/uploads",
         "Storage__Provider": "Sqlite",
-        "Storage__DatabasePath": "../../.local/suportehub.db",
-        "Email__OutboxPath": "../../.local/mail",
-        "Authentication__PublicBaseUrl": "http://localhost:5218"
+        "Storage__DatabasePath": "../../.local/suportehub.db"
       }
     },
     "https": {
@@ -26,9 +24,7 @@
         "Storage__KeysPath": "../../.local/keys",
         "Storage__UploadsPath": "../../.local/uploads",
         "Storage__Provider": "Sqlite",
-        "Storage__DatabasePath": "../../.local/suportehub.db",
-        "Email__OutboxPath": "../../.local/mail",
-        "Authentication__PublicBaseUrl": "https://localhost:7238"
+        "Storage__DatabasePath": "../../.local/suportehub.db"
       }
     }
   }

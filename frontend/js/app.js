@@ -24,24 +24,21 @@ async function api(path,options={}){
 function shell(active,content){
  const links=isAgent()?[['painel','🌈','Painel'],['fila','🎀','Fila de chamados'],['meus','💌','Meus atendimentos'],['equipe','👯','Equipe'],['relatorios','📊','Relatórios']]:[['novo','✨','Novo chamado'],['chamados','📬','Meus chamados']];
  const initials=user.nome.split(/\s+/).slice(0,2).map(s=>s[0]).join('').toUpperCase();
- return `<div class="bub b1"></div><div class="bub b2"></div><div class="shell"><aside><div class="logo"><div class="ico">♥</div>SuporteHub</div><nav>${links.map(([path,icon,label])=>`<a href="#/${path}" class="${path===active?'on':''}">${icon} ${label}</a>`).join('')}</nav><a class="lnk" href="#/conta" style="margin-top:auto;padding:0 8px">Minha conta</a><button class="user" id="out" title="Sair" style="margin-top:0"><span class="av">${esc(initials)}</span><span><b>${esc(user.nome)}</b><small>${isAgent()?'Agente de suporte':'Cliente'} · Sair</small></span></button></aside><main>${content}</main></div>`;
+ return `<div class="bub b1"></div><div class="bub b2"></div><div class="shell"><aside><div class="logo"><div class="ico">♥</div>SuporteHub</div><nav>${links.map(([path,icon,label])=>`<a href="#/${path}" class="${path===active?'on':''}">${icon} ${label}</a>`).join('')}</nav><button class="user" id="out" title="Sair"><span class="av">${esc(initials)}</span><span><b>${esc(user.nome)}</b><small>${isAgent()?'Agente de suporte':'Cliente'} · Sair</small></span></button></aside><main>${content}</main></div>`;
 }
 function page(active,content){render(shell(active,content));$('#out').onclick=async()=>{try{await api('/auth/logout',{method:'POST'});user=null;tickets=[];agents=[];location.hash='#/login'}catch(e){toast(e.message)}}}
 async function submit(form,task){
  const button=form.querySelector('[type=submit]'),error=form.querySelector('[role=alert]');
  if(button.disabled)return;
- const label=button.textContent;button.disabled=true;button.textContent=form.dataset.pendingLabel||'Salvando…';if(error)error.textContent='';
+ const label=button.textContent;button.disabled=true;button.textContent='Salvando…';if(error)error.textContent='';
  try{await task()}catch(e){if(error&&form.isConnected)error.textContent=e.message;else toast(e.message);if(e.status===401&&user){user=null;location.hash='#/login'}}
  finally{button.disabled=false;button.textContent=label}
 }
 async function route(){
- const version=++routeVersion,fragment=location.hash.replace(/^#\//,''),question=fragment.indexOf('?'),path=question<0?fragment:fragment.slice(0,question),params=new URLSearchParams(question<0?'':fragment.slice(question+1)),[view='login',id]=path.split('/');
- if(view==='esqueci-senha'){vForgotPassword();return}
- if(view==='redefinir-senha'){vResetPassword(params);return}
- if(!user){if(view==='cadastro')vRegister();else if(view!=='login'&&view!==''){location.hash='#/login'}else vLogin(params);return}
+ const version=++routeVersion,[view='login',id]=location.hash.replace(/^#\//,'').split('/');
+ if(!user){if(view==='cadastro')vRegister();else if(view!=='login'&&view!==''){location.hash='#/login'}else vLogin();return}
  if(['login','cadastro',''].includes(view)){location.hash=isAgent()?'#/painel':'#/novo';return}
  if(!isAgent()&&['painel','fila','meus','equipe','relatorios'].includes(view)){location.hash='#/chamados';return}
- if(view==='conta'){vAccount(params);return}
  if(view==='novo'){vNovo();return}
  page(view,'<p role="status">Carregando…</p>');
  try{

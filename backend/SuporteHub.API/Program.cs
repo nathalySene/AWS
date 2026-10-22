@@ -7,7 +7,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using SuporteHub.API.Models;
 using SuporteHub.API.Storage;
-using SuporteHub.API.Services;
 using System.Threading.RateLimiting;
 
 // Resolve configuration and frontend from the built application, regardless of cwd.
@@ -20,9 +19,6 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services.AddSingleton<PasswordHasher<Conta>>();
-builder.Services.AddSingleton<IAuthEmailSender, AuthEmailSender>();
-builder.Services.AddSingleton<PasswordResetService>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<PasswordResetService>());
 builder.Services.AddSingleton<IAmazonDynamoDB>(_ =>
 {
     var endpoint = builder.Configuration["DynamoDb:ServiceUrl"];
@@ -45,49 +41,17 @@ else
     throw new InvalidOperationException("Storage:Provider deve ser Sqlite ou DynamoDb.");
 var keyPath = builder.Configuration["Storage:KeysPath"] ?? ".local/keys";
 builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(Path.GetFullPath(keyPath))).SetApplicationName("SuporteHub");
-var authentication = builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(o =>
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(o =>
 {
     o.Cookie.Name = "SuporteHub.Session"; o.Cookie.HttpOnly = true; o.Cookie.SameSite = SameSiteMode.Strict;
     o.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest; o.ExpireTimeSpan = TimeSpan.FromHours(8); o.SlidingExpiration = true;
-    o.Events.OnValidatePrincipal = SessionValidation.Validate;
     o.Events.OnRedirectToLogin = context => { context.Response.StatusCode = 401; return Task.CompletedTask; };
     o.Events.OnRedirectToAccessDenied = context => { context.Response.StatusCode = 403; return Task.CompletedTask; };
 });
-authentication.AddCookie(GoogleAuthConfiguration.ExternalScheme, o =>
-{
-    o.Cookie.Name = "SuporteHub.GoogleExternal"; o.Cookie.HttpOnly = true;
-    o.Cookie.SameSite = SameSiteMode.Lax; o.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
-    o.ExpireTimeSpan = TimeSpan.FromMinutes(5); o.SlidingExpiration = false;
-});
-if (GoogleAuthConfiguration.IsConfigured(builder.Configuration))
-{
-    authentication.AddGoogle(GoogleAuthConfiguration.Scheme, o =>
-    {
-        o.ClientId = builder.Configuration["Authentication:Google:ClientId"]!;
-        o.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"]!;
-        o.SignInScheme = GoogleAuthConfiguration.ExternalScheme;
-        o.CallbackPath = "/signin-google"; o.SaveTokens = false; o.UsePkce = true;
-        o.Events.OnCreatingTicket = GoogleAuthConfiguration.NormalizeClaims;
-        o.Events.OnRemoteFailure = context =>
-        {
-            var linking = context.Properties?.Items.TryGetValue("suportehub:google-intent", out var intent) == true && intent == "link";
-            context.Response.Redirect(linking ? "/#/conta?erro=google-invalid" : "/#/login?erro=google-invalid");
-            context.HandleResponse(); return Task.CompletedTask;
-        };
-        o.Events.OnAccessDenied = context =>
-        {
-            var linking = context.Properties?.Items.TryGetValue("suportehub:google-intent", out var intent) == true && intent == "link";
-            context.Response.Redirect(linking ? "/#/conta?erro=google-cancelled" : "/#/login?erro=google-cancelled");
-            context.HandleResponse(); return Task.CompletedTask;
-        };
-    });
-}
 builder.Services.AddAuthorization();
 builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = 429;
-    o.AddPolicy("password-reset", context => RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "local",
-        _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
     o.AddPolicy("auth", context => RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "local",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
@@ -119,7 +83,6 @@ app.UseExceptionHandler(handler => handler.Run(async context =>
 }));
 app.Use(async (context, next) =>
 {
-    context.Response.Headers["Referrer-Policy"] = "no-referrer";
     if (context.Request.Path.StartsWithSegments("/api"))
     {
         context.Response.Headers.CacheControl = "no-store";
@@ -138,5 +101,3 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 app.MapControllers();
 await app.RunAsync();
-
-public partial class Program { }

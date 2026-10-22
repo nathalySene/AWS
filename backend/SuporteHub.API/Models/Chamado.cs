@@ -26,10 +26,5 @@ public class Conta
     public string Nome { get; set; } = "";
     public string SenhaHash { get; set; } = "";
     public string Perfil { get; set; } = "client";
-    public string? GoogleSubject { get; set; }
-    // Empty preserves existing accounts/cookies; credential changes replace this stamp.
-    public string SecurityStamp { get; set; } = "";
-    public string? PasswordResetTokenHash { get; set; }
-    public DateTime? PasswordResetExpiresAt { get; set; }
     public DateTime DataCriacao { get; set; } = DateTime.UtcNow;
 }
