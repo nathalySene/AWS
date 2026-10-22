@@ -4,10 +4,11 @@ param(
     [string]$AwsProfile = 'suportehub',
     [switch]$CheckOnly,
     [switch]$CreateAdmin,
-    [switch]$PromoteAdmin
+    [switch]$PromoteAdmin,
+    [switch]$CheckAccount
 )
 $ErrorActionPreference = 'Stop'
-if ($CreateAdmin -and $PromoteAdmin) { throw 'Use somente -CreateAdmin ou -PromoteAdmin.' }
+if (@($CreateAdmin, $PromoteAdmin, $CheckAccount | Where-Object { $_ }).Count -gt 1) { throw 'Use somente uma acao: -CreateAdmin, -PromoteAdmin ou -CheckAccount.' }
 if (-not (Get-Command aws -ErrorAction SilentlyContinue)) {
     throw 'Instale a AWS CLI v2 e abra um novo PowerShell. Consulte docs/AWS.md.'
 }
@@ -34,11 +35,32 @@ if ($hash.Count -ne 1 -or $range.Count -ne 1 -or $hash[0].AttributeName -ne 'PK'
 if ($table.TableStatus -notin @('ACTIVE', 'UPDATING')) { throw 'Aguarde a tabela ficar disponivel.' }
 Write-Host 'Tabela e identidade verificadas. Nenhum registro foi escrito nesta verificacao.'
 if ($CheckOnly) { return }
+# A stale server on port 5218 can show a different version or database.
+$client = New-Object System.Net.Sockets.TcpClient
+$portBusy = $false
+try { $task = $client.ConnectAsync('127.0.0.1', 5218); if ($task.Wait(500)) { $portBusy = $client.Connected } }
+catch { } finally { $client.Dispose() }
+if ($portBusy) { throw 'Ja existe um servidor na porta 5218. Pare a versao anterior com Ctrl+C antes de criar/promover contas ou iniciar esta versao.' }
+
+# Explicit configuration: no dependency on launchSettings.json or a default SQLite profile.
+$env:Storage__Provider = 'DynamoDb'
+$env:DynamoDb__TableName = 'suportehub-dev'
+$env:DynamoDb__Region = 'sa-east-1'
+$env:DynamoDb__ServiceUrl = ''
+$env:Storage__KeysPath = Join-Path $repoRoot '.local/aws-keys'
+$env:Storage__UploadsPath = Join-Path $repoRoot '.local/aws-uploads'
+$env:ASPNETCORE_ENVIRONMENT = 'Development'
+$env:ASPNETCORE_URLS = 'http://localhost:5218'
+Write-Host 'SuporteHub 1.3.1 | DynamoDB | suportehub-dev | sa-east-1'
 Push-Location $repoRoot
 try {
-    $runArgs = @('run', '--project', 'backend/SuporteHub.API/SuporteHub.API.csproj', '--launch-profile', 'aws')
-    if ($CreateAdmin) { $runArgs += @('--', '--create-admin') }
-    if ($PromoteAdmin) { $runArgs += @('--', '--promote-admin') }
-    & dotnet @runArgs
-    if ($LASTEXITCODE -ne 0) { throw 'A API nao iniciou. Confira a mensagem acima.' }
+    & dotnet build 'backend/SuporteHub.API/SuporteHub.API.csproj' --configuration Debug
+    if ($LASTEXITCODE -ne 0) { throw 'A compilacao falhou; nenhuma conta foi criada ou promovida. Pare qualquer API antiga antes de tentar novamente.' }
+    $dll = Join-Path $repoRoot 'backend/SuporteHub.API/bin/Debug/net10.0/SuporteHub.API.dll'
+    $appArgs = @($dll, '--require-aws=true')
+    if ($CreateAdmin) { $appArgs += '--create-admin' }
+    if ($PromoteAdmin) { $appArgs += '--promote-admin' }
+    if ($CheckAccount) { $appArgs += '--check-account' }
+    & dotnet @appArgs
+    if ($LASTEXITCODE -ne 0) { throw 'A operacao nao foi concluida. Confira a mensagem acima.' }
 } finally { Pop-Location }

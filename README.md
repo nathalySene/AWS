@@ -88,6 +88,8 @@ A área administrativa inclui lista e filtros de chamados, abertura em nome do s
 
 ## Opção: usar a tabela AWS existente
 
+Versão **1.3.1**: o script AWS usa configuração explícita, bloqueia servidor antigo na porta 5218 e confirma no banco o perfil após criar/promover um administrador. A tela de login informa Banco AWS ou Banco local.
+
 Guia para Windows com AWS CLI, IAM, teste de esquema e inicialização: **[docs/AWS.md](docs/AWS.md)**. O perfil `aws` permite iniciar sem Bash ou Docker.
 
 Configuração preservada:

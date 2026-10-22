@@ -133,3 +133,47 @@ O perfil `aws` força DynamoDB, região São Paulo e a tabela indicada, sem util
 Para voltar ao banco local, pare a execução AWS e use `--launch-profile http`. Os bancos permanecem separados. Ações da aplicação no modo AWS gravam dados na tabela e podem gerar uso/cobrança normal do DynamoDB; nenhuma infraestrutura paga é criada pelo script.
 
 A validação da integração real depende de uma identidade válida com essas permissões e da conectividade. Não considere o banco AWS conectado até o teste e `/api/health` confirmarem DynamoDB no seu computador.
+
+## Administrador entra como usuário: verificação na versão 1.3.1
+
+Use os arquivos atualizados da mesma pasta para criar/promover a conta e iniciar a aplicação. Pare o servidor anterior com `Ctrl+C` antes de executar comandos administrativos. O script agora recusa a execução quando há um servidor na porta 5218, compila o projeto e executa a DLL com configuração AWS explícita. Não depende de um perfil de inicialização ausente ou de configurações herdadas de SQLite.
+
+Para corrigir uma conta que já existe, preservando sua senha:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-aws.ps1 -PromoteAdmin
+```
+
+Informe exatamente o e-mail que será usado no login. O comando faz uma leitura consistente depois da gravação e deve mostrar **Conta confirmada no banco** e **Perfil: admin**, além de DynamoDB, tabela e região. Se essa confirmação não aparecer, a promoção não foi confirmada. Não faça outro cadastro público depois: entre com a conta promovida.
+
+Para consultar somente o perfil de uma conta, com a API parada:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-aws.ps1 -CheckAccount
+```
+
+O comando solicita o e-mail e exibe somente sua identificação e o perfil salvo, sem hash ou senha. Para um e-mail novo, `-CreateAdmin` também confirma o perfil depois de gravar. Se o e-mail já existe, o comando orienta usar `-PromoteAdmin`, sem sobrescrever a senha.
+
+Inicie usando o mesmo script, sem opções. Em **http://localhost:5218/api/health**, confirme:
+
+```json
+{
+  "status": "ok",
+  "database": "DynamoDB",
+  "table": "suportehub-dev",
+  "region": "sa-east-1",
+  "version": "1.3.1"
+}
+```
+
+Se a resposta não tiver a versão 1.3.1, você ainda está acessando outro servidor ou uma compilação anterior. Use a mesma origem `http://localhost:5218` em todas as telas; `127.0.0.1` e `localhost` possuem cookies separados.
+
+Abra a página inicial com `Ctrl+F5`. O login mostra **Banco AWS**. Entre com e-mail e senha da conta confirmada; o frontend consulta `/api/auth/me` para obter o perfil da sessão antes de direcionar. Depois do login, esse endpoint deve devolver `perfil: admin`. Antes do login, `401` e uma resposta vazia nesse endereço são esperados.
+
+A versão atual força a cópia dos arquivos de frontend na compilação, usa URLs de assets com versão e evita cache de páginas/scripts para não reaproveitar uma interface antiga que classifique `admin` como cliente. Nenhuma senha, conta ou chamado existente é apagado por essa atualização.
+
+### Testes específicos
+
+`tests/dynamodb_admin.py` valida criação, confirmação, duplicidade, promoção, sessão, reinício e login real no navegador contra DynamoDB Local efêmero em loopback. Ele não aceita endpoints AWS e não modifica tabelas reais. Defina `DYNAMODB_TEST_ENDPOINT` para uma instância de teste descartável.
+
+`tests/aws_launcher.py` executa o script em PowerShell real com comandos `aws`/`dotnet` simulados, verificando a escolha do banco, argumentos administrativos, falha de compilação e proteção da porta. Não usa credenciais AWS. É possível indicar o executável PowerShell por `PWSH_BIN`. Esses testes não substituem a confirmação da identidade e do perfil na tabela AWS do seu ambiente.

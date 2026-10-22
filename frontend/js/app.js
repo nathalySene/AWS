@@ -8,7 +8,8 @@ const colors={Aberto:['#dbeafe','#1d4ed8'],'Em andamento':['#fef3c7','#b45309'],
 const priorityColors={Baixa:'#8e7ba3','Média':'#d97706',Alta:'#dc2626',Urgente:'#9f1239'};
 const pill=s=>{const c=colors[s]||['#ede9fe','#6d28d9'];return `<span class="pill" style="background:${c[0]};color:${c[1]}">${esc(s)}</span>`};
 const date=s=>s?new Date(s).toLocaleString('pt-BR'):'—';
-let user=null,tickets=[],agents=[],routeVersion=0;
+let user=null,tickets=[],agents=[],routeVersion=0,serverInfo=null;
+const databaseLabel=()=>serverInfo?.database==='DynamoDB'?'Banco AWS':serverInfo?.database==='SQLite'?'Banco local':'';
 const isAdmin=()=>user?.perfil==='admin';
 const render=html=>{$('#app').innerHTML=html};
 const toast=message=>{const e=$('#toast');e.textContent=message;e.classList.add('on');clearTimeout(toast.timer);toast.timer=setTimeout(()=>e.classList.remove('on'),4000)};
@@ -71,7 +72,7 @@ addEventListener('hashchange',()=>{if(initialized)route()});
 let initialized=false;
 async function initialize(){
  render('<main><p role="status">Verificando sessão…</p></main>');
- try{user=await api('/auth/me')}
+ try{const results=await Promise.allSettled([api('/health'),api('/auth/me')]);if(results[0].status==='fulfilled')serverInfo=results[0].value;if(results[1].status==='rejected')throw results[1].reason;user=results[1].value}
  catch(e){if(e.status!==401){render(`<main><p class="err" role="alert">${esc(e.message)}</p><button class="btn2" id="retry">Tentar novamente</button></main>`);$('#retry').onclick=initialize;return}}
  initialized=true;route();
 }

@@ -59,7 +59,34 @@ builder.Services.AddRateLimiter(o =>
 });
 var app = builder.Build();
 var store = app.Services.GetRequiredService<IAppStore>();
+if (builder.Configuration.GetValue<bool>("require-aws") &&
+    (store.ProviderName != "DynamoDB" || !string.IsNullOrEmpty(builder.Configuration["DynamoDb:ServiceUrl"])
+     || builder.Configuration["DynamoDb:TableName"] != "suportehub-dev"
+     || builder.Configuration["DynamoDb:Region"] != "sa-east-1"))
+    throw new InvalidOperationException("Modo AWS obrigatório: confira DynamoDB, suportehub-dev, sa-east-1 e ausência de endpoint local. Operação cancelada antes de acessar o banco.");
 await store.InitializeAsync();
+var appVersion = typeof(Conta).Assembly.GetName().Version?.ToString(3) ?? "unknown";
+var awsStore = store.ProviderName == "DynamoDB";
+var tableName = awsStore ? builder.Configuration["DynamoDb:TableName"] : null;
+var awsRegion = awsStore ? builder.Configuration["DynamoDb:Region"] : null;
+Console.WriteLine($"SuporteHub {appVersion} | Banco: {store.ProviderName}" +
+    (awsStore ? $" | Tabela: {tableName} | Região: {awsRegion}" : ""));
+
+async Task ConfirmAccount(string email, bool requireAdmin)
+{
+    var saved = await store.Get<Conta>("USERS", email);
+    if (saved is null || saved.Value.Value.Email != email || (requireAdmin && saved.Value.Value.Perfil != "admin"))
+        throw new InvalidOperationException("A confirmação da conta no banco falhou. Nenhum sucesso foi confirmado.");
+    Console.WriteLine($"Conta confirmada no banco: {saved.Value.Value.Email} | Perfil: {saved.Value.Value.Perfil}");
+}
+
+if (args.Contains("--check-account"))
+{
+    Console.Write("E-mail para verificar: ");
+    var email = (Console.ReadLine() ?? "").Trim().ToLowerInvariant();
+    await ConfirmAccount(email, false);
+    return;
+}
 
 // Administrative provisioning is available only to an operator with server access.
 if (args.Contains("--promote-admin"))
@@ -70,6 +97,7 @@ if (args.Contains("--promote-admin"))
         ?? throw new InvalidOperationException("Conta não encontrada. Cadastre-a primeiro.");
     var account = entry.Value; account.Perfil = "admin";
     await store.Put("USERS", email, account, entry.Version);
+    await ConfirmAccount(email, true);
     Console.WriteLine("Administrador configurado. Entre novamente para atualizar a sessão.");
     return;
 }
@@ -87,8 +115,15 @@ if (args.Contains("--create-admin"))
         throw new InvalidOperationException("E-mail, nome ou senha inválidos.");
     var account = new Conta { Email = email, Nome = name, Perfil = "admin" };
     account.SenhaHash = app.Services.GetRequiredService<PasswordHasher<Conta>>().HashPassword(account, password);
-    await store.Put("USERS", email, account);
-    Console.WriteLine("Administrador criado."); return;
+    try { await store.Put("USERS", email, account); }
+    catch (StorageConflictException)
+    {
+        Console.Error.WriteLine("Esse e-mail já existe. Use -PromoteAdmin para preservar a senha e tornar a conta administradora.");
+        Environment.ExitCode = 1;
+        return;
+    }
+    await ConfirmAccount(email, true);
+    Console.WriteLine("Administrador criado. Use este e-mail no login, sem fazer outro cadastro."); return;
 }
 
 app.UseExceptionHandler(handler => handler.Run(async context =>
@@ -98,9 +133,9 @@ app.UseExceptionHandler(handler => handler.Run(async context =>
 }));
 app.Use(async (context, next) =>
 {
+    context.Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
     if (context.Request.Path.StartsWithSegments("/api"))
     {
-        context.Response.Headers.CacheControl = "no-store";
         if (!HttpMethods.IsGet(context.Request.Method) && !HttpMethods.IsHead(context.Request.Method)
             && context.Request.Headers["X-Requested-With"] != "SuporteHub")
         { context.Response.StatusCode = 400; await context.Response.WriteAsJsonAsync(new { mensagem = "Requisição inválida." }); return; }
@@ -111,7 +146,7 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 if (app.Environment.IsDevelopment()) app.MapOpenApi();
-app.MapGet("/api/health", async () => { await store.Get<object>("META", "READINESS"); return Results.Ok(new { status = "ok", database = store.ProviderName }); });
+app.MapGet("/api/health", async () => { await store.Get<object>("META", "READINESS"); return Results.Ok(new { status = "ok", database = store.ProviderName, table = tableName, region = awsRegion, version = appVersion }); });
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.MapControllers();
