@@ -100,7 +100,7 @@ class AdminTests(unittest.TestCase):
                 self.assertEqual(page.locator('#googleLogin').count(), 0)
                 page.locator('#em').fill('admin@example.com'); page.locator('#pw').fill(self.password)
                 page.locator('#lf [type=submit]').click(); page.wait_for_url('**/#/painel')
-                page.get_by_text('👑 Área do administrador', exact=True).wait_for()
+                page.get_by_text('Área do administrador', exact=True).wait_for()
                 page.goto(self.base+'/#/admin-novo'); page.locator('#requester').select_option(email)
                 page.locator('#as').fill('=Ticket navegador <img src=x onerror=alert(1)>')
                 page.locator('#ds').fill('Problema criado pela administração'); page.locator('#adminNew [type=submit]').click()
